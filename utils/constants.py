@@ -1,5 +1,3 @@
-import torch
-
 from utils.utils import DrumList, Drum
 
 DRUMS = DrumList([
@@ -26,5 +24,3 @@ DRUMS = DrumList([
     Drum(pitch=58, id=20, name="Tom 3 (Rim)"),
     Drum(pitch=59, id=21, name="Ride (Edge)"),
 ])
-
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

@@ -6,7 +6,6 @@ from torch import nn
 from torchmetrics.classification import MulticlassAccuracy, MulticlassF1Score
 
 from utils.confusion_matrix import confusion_matrix_pipeline
-from utils.constants import DEVICE
 
 
 class MultivariateClassifier(L.LightningModule):
@@ -46,8 +45,8 @@ class MultivariateClassifier(L.LightningModule):
         self.class_names = class_names if class_names is not None else [str(i) for i in range(num_classes)]
         self.criterion = loss_function
         self.metrics = {
-            "acc": MulticlassAccuracy(num_classes=num_classes).to(DEVICE),
-            "f1": MulticlassF1Score(num_classes=num_classes, average='macro').to(DEVICE),
+            "acc": MulticlassAccuracy(num_classes=num_classes),
+            "f1": MulticlassF1Score(num_classes=num_classes, average='macro'),
         }
         if hparams_to_log is not None:
             self.save_hyperparameters(hparams_to_log)
