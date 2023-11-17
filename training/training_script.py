@@ -7,7 +7,7 @@ import lightning.pytorch as pl
 from dataset.groove_dataset import GrooveMidiModule
 from data_processing.track_processors import TrackProcessor
 from models.multivariate_classifier import MultivariateClassifier
-from parser.parameters import ScriptParameters, parse_args
+from cli.parser import ScriptParameters, parse_args
 
 
 def main(params: ScriptParameters):
