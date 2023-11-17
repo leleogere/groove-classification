@@ -31,6 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('--data-path', type=Path, required=True, help='Path to the dataset.')
     parser.add_argument('--processed-data-path', type=Path, required=True, help='Path to store the processed data.')
     parser.add_argument('--results-path', type=Path, required=True, help='Path to the results.')
+    parser.add_argument('--start-at', type=int, default=0, help='Index of the first hyperparameter set to run.')
     args = parser.parse_args()
 
     HYPERPARAMETERS = [
@@ -62,7 +63,7 @@ if __name__ == '__main__':
 
     random.seed(22)
     random.shuffle(domain)
-    START_AT = args.start_at if hasattr(args, 'start_at') else 0
+    START_AT = args.start_at
 
     for i, hparams in enumerate(domain):
         if i < START_AT:
