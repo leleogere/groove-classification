@@ -28,9 +28,9 @@ class HyperParameter:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False)
-    parser.add_argument('--data-path', type=str, required=True, help='Path to the dataset.')
-    parser.add_argument('--processed-data-path', type=str, required=True, help='Path to stored the processed data.')
-    parser.add_argument('--results-path', type=str, required=True, help='Path to the results.')
+    parser.add_argument('--data-path', type=Path, required=True, help='Path to the dataset.')
+    parser.add_argument('--processed-data-path', type=Path, required=True, help='Path to store the processed data.')
+    parser.add_argument('--results-path', type=Path, required=True, help='Path to the results.')
     args = parser.parse_args()
 
     HYPERPARAMETERS = [
