@@ -84,6 +84,7 @@ def main(params: ScriptParameters):
         patience=params.training_patience,
         mode='min',
     )
+    params.results_path.mkdir(parents=True, exist_ok=True)
     logger = pl.loggers.TensorBoardLogger(
         save_dir=params.results_path,
         name=datetime.now().strftime("%Y-%m-%d"),
