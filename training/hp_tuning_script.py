@@ -1,0 +1,99 @@
+import argparse
+import itertools
+from dataclasses import dataclass
+import random
+from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+
+from cli.parser import ScriptParameters
+from data_processing.track_processors import TrackProcessors
+from training.training_script import main
+
+
+@dataclass(frozen=True)
+class HyperParameter:
+    name: str
+    values: list
+
+    def __post_init__(self):
+        if not all(isinstance(v, self.type) or v is None for v in self.values):
+            raise ValueError(f'All values must be of the same type: {type(self.values[0])}')
+
+    @property
+    def type(self):
+        return type(self.values[0])
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False)
+    parser.add_argument('--data-path', type=str, required=True, help='Path to the dataset.')
+    parser.add_argument('--processed-data-path', type=str, required=True, help='Path to stored the processed data.')
+    parser.add_argument('--results-path', type=str, required=True, help='Path to the results.')
+    args = parser.parse_args()
+
+    HYPERPARAMETERS = [
+        HyperParameter('LstmHiddenSize', [16, 32, 64, 128]),
+        HyperParameter('LstmNumLayers', [1, 2]),
+        HyperParameter('DropoutRate', np.arange(0.1, 0.6, 0.2).tolist()),
+        HyperParameter('lr', np.logspace(-4, -2, 3).tolist()),
+        HyperParameter('reg', np.logspace(-4, -2, 3).tolist()),
+        HyperParameter('NumMeasures', [1, 2, 4, 8]),
+        HyperParameter('IMFW', [True, False]),
+        HyperParameter('UseTempo', [True, False]),
+        HyperParameter('UseAugmentedDataset', [True, False]),
+        HyperParameter('NumAugmentations', [0, 2, 5, 10]),
+    ]
+
+    domain = list(
+        dict(zip(map(lambda hp: hp.name, HYPERPARAMETERS), x))
+        for x in itertools.product(*map(lambda hp: hp.values, HYPERPARAMETERS))
+    )  # See https://stackoverflow.com/questions/5228158/cartesian-product-of-a-dictionary-of-lists/40623158
+
+    def is_valid(hparams: dict) -> bool:
+        if hparams['UseAugmentedDataset'] and hparams['NumAugmentations'] == 0:
+            return False
+        if not hparams['UseAugmentedDataset'] and hparams['NumAugmentations'] != 0:
+            return False
+        return True
+
+    domain = list(filter(is_valid, domain))
+
+    random.seed(22)
+    random.shuffle(domain)
+    START_AT = args.start_at if hasattr(args, 'start_at') else 0
+
+    for i, hparams in enumerate(domain):
+        if i < START_AT:
+            continue
+        params = ScriptParameters(
+            data_path=args.data_path,
+            processed_data_path=args.processed_data_path,
+            results_path=args.results_path,
+            track_processor_type=TrackProcessors.from_str('multivariate'),
+            track_processor_pianoroll_resolution=10,
+            training_batch_size=128,
+            training_num_epochs=100,
+            training_patience=40,
+            hp_use_tempo=hparams['UseTempo'],
+            hp_num_measures=hparams['NumMeasures'],
+            hp_measures_overlap=False,
+            hp_imfw=hparams['IMFW'],
+            hp_use_augmented_dataset=hparams['UseAugmentedDataset'],
+            hp_num_augmentations=hparams['NumAugmentations'],
+            hp_lstm_hidden_size=hparams['LstmHiddenSize'],
+            hp_lstm_num_layers=hparams['LstmNumLayers'],
+            hp_dropout_rate=hparams['DropoutRate'],
+            hp_lr=hparams['lr'],
+            hp_reg=hparams['reg'],
+            min_tracks_per_label=30,
+        )
+        print("=" * 80)
+        print(f'Running {i + 1}/{len(domain)}: {params.__dict__}')
+        main(params)
+        if Path("/tmp/groove-stop").exists():
+            print("Stopping early")
+            Path("/tmp/groove-stop").unlink()
+            (params.results_path / f"end_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt").touch()
+            break
