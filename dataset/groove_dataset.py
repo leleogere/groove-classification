@@ -151,6 +151,7 @@ class GrooveMidiModule(L.LightningDataModule):
     _groove_folder_name: str = "groove"
     _labels_file_name: str = "labels.txt"
     _already_setup: bool = False
+    num_workers: int = 20
 
     def __init__(
             self,
@@ -287,6 +288,7 @@ class GrooveMidiModule(L.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=True,
             collate_fn=self.track_processor.collate_fn,
+            num_workers=self.num_workers,
         )
 
     def val_dataloader(self) -> DataLoader:
@@ -295,6 +297,7 @@ class GrooveMidiModule(L.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=False,
             collate_fn=self.track_processor.collate_fn,
+            num_workers=self.num_workers,
         )
 
     def test_dataloader(self) -> DataLoader:
@@ -303,6 +306,7 @@ class GrooveMidiModule(L.LightningDataModule):
             batch_size=self.batch_size,
             shuffle=False,
             collate_fn=self.track_processor.collate_fn,
+            num_workers=self.num_workers,
         )
 
 
