@@ -108,7 +108,7 @@ class RelativeMultivariateTrackProcessor(TrackProcessorWithTempo):
 class PianoRollTrackProcessor(RelativeMultivariateTrackProcessor):
     drums = DRUMS
 
-    def __init__(self, resolution: int = 24, use_tempo: bool = True):
+    def __init__(self, resolution: int = 20, use_tempo: bool = True):
         super().__init__(use_tempo=use_tempo)
         self.resolution = resolution
 
