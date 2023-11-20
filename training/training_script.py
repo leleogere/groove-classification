@@ -47,8 +47,8 @@ def main(params: ScriptParameters):
     # Compute inverse median frequency weights
     if params.hp_imfw:
         count_c = {
-            label: sum(groove_module.label_infos[label][split]['num_chunks'] for split in ['train', 'validation'])
-            for label in groove_module.label_infos.keys()
+            label: sum(groove_module.label_infos[label][split]['chunks'] for split in ['train', 'validation'])
+            for label in groove_module.unique_labels
         }
         total = sum(count_c.values())
         freq_c = {label: count / total for label, count in count_c.items()}
@@ -59,7 +59,7 @@ def main(params: ScriptParameters):
             else (sorted_freq_c[len(sorted_freq_c) // 2 - 1] + sorted_freq_c[len(sorted_freq_c) // 2]) / 2
         )
         weights_c = {label: median_freq / freq for label, freq in freq_c.items()}
-        weights_c = torch.tensor(weights_c.values(), dtype=torch.float32)
+        weights_c = torch.tensor(list(weights_c.values()), dtype=torch.float32)
     else:
         weights_c = None
     loss = torch.nn.CrossEntropyLoss(weight=weights_c)
