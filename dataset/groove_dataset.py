@@ -5,14 +5,13 @@ from typing import Callable
 from urllib.request import urlretrieve
 import zipfile
 
-import torch
 from joblib import Memory
 
 import lightning as L
 from torch.utils.data import Dataset, DataLoader
 
 from data_augmentation.midi_augmentor import MidiAugmentor
-from data_processing.midi_splitter import Splitter
+from data_augmentation.midi_splitter import Splitter
 from data_processing.track_processors import TrackProcessor, RelativeMultivariateTrackProcessor
 from utils.constants import DRUMS
 from utils.utils import process_label, Track, _write_labels_info

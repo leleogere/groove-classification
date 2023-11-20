@@ -83,6 +83,7 @@ class RelativeNote:
             timeshift=timeshift
         )
 
+
 class Track:
     def __init__(
             self,
@@ -155,39 +156,6 @@ class ProcessedTrack(Track):
     ):
         super().__init__(**kwargs)
         self.data = data
-
-
-def read_notes(midi_path: Path):
-    # raise NotImplementedError("Test.")
-    midi = MidiFile(midi_path)
-    drum_tracks = [track for track in midi.instruments if track.is_drum]
-    if len(drum_tracks) != 1:
-        raise ValueError(f"Expected 1 drum track, got {len(drum_tracks)} in {midi_path}.")
-    notes = []
-    last_start = 0
-    for note in sorted(drum_tracks[0].relative_notes, key=lambda x: x.start):
-        if note.start < last_start:
-            raise ValueError(f"Notes are not sorted by start time in {midi_path}.")
-        notes.append(
-            RelativeNote(
-                pitch=note.pitch,
-                velocity=note.velocity,
-                duration=note.end - note.start,
-                timeshift=note.start - last_start
-            )
-        )
-        last_start = note.start
-    return notes
-
-
-def read_drums_list(file_path: Path):
-    with open(file_path) as f:
-        reader = csv.DictReader(f)
-        drums = DrumList([
-            Drum(pitch=int(row["Pitch"]), id=idx, name=row["Roland Mapping"])
-            for idx, row in enumerate(reader)
-        ])
-        return drums
 
 
 def process_label(raw_label: str, keep_sublabel_for: list[str] | None = None) -> str:
