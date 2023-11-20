@@ -4,3 +4,4 @@ __pycache__
 results
 tests
 .idea
+excluded_*
