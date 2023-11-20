@@ -7,7 +7,7 @@ import pretty_midi as pm
 from tqdm import tqdm
 
 from utils.utils import Track
-from utils.utils import load_and_check_midi_file, get_midi_paths, find_common_root
+from utils.utils import load_and_validate_midi_file, get_midi_paths, find_common_root
 
 
 def sliding_window(seq: Sequence, window_size: int = 2) -> Sequence[Sequence]:
@@ -78,7 +78,7 @@ class Splitter:
         :todo: What if a note starts before the chunk but ends after the chunk?
         """
         # Read midi and associated information
-        midi = load_and_check_midi_file(midi_path, unique_track=True, unique_tempo=True, unique_time_signature=True)
+        midi = load_and_validate_midi_file(midi_path, unique_track=True, unique_tempo=True, unique_time_signature=True)
         track: pm.Instrument = midi.instruments[0]
         bpm = midi.get_tempo_changes()[1][0]
         time_signature = midi.time_signature_changes[0]
