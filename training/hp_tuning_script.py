@@ -5,8 +5,6 @@ import random
 from datetime import datetime
 from pathlib import Path
 
-import numpy as np
-
 from cli.parser import ScriptParameters
 from data_processing.track_processors import TrackProcessors
 from training.training_script import main
@@ -42,7 +40,7 @@ if __name__ == '__main__':
         # HyperParameter('lr', np.logspace(-4, -2, 3).tolist()),
         HyperParameter('lr', [1e-3]),
         # HyperParameter('reg', np.logspace(-4, -2, 3).tolist()),
-        HyperParameter('reg', [1e-3]),
+        HyperParameter('reg', [1e-4]),
         HyperParameter('NumMeasures', [4]),
         HyperParameter('IMFW', [True, False]),
         HyperParameter('UseTempo', [True, False]),
@@ -78,7 +76,7 @@ if __name__ == '__main__':
             track_processor_type=TrackProcessors.from_str('multivariate'),
             track_processor_pianoroll_resolution=10,
             training_batch_size=256,
-            training_num_epochs=100,
+            training_num_epochs=200,
             training_patience=40,
             hp_use_tempo=hparams['UseTempo'],
             hp_num_measures=hparams['NumMeasures'],
