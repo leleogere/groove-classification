@@ -64,20 +64,6 @@ class TrackProcessorWithTempo(TrackProcessor):
         return results
 
 
-class PianoRollTrackProcessor(TrackProcessorWithTempo):
-    drums = DRUMS
-
-    def __init__(self, resolution: int = 24, use_tempo: bool = True):
-        super().__init__(use_tempo=use_tempo)
-        self.resolution = resolution
-
-    def short_name(self) -> str:
-        return f'pianoroll'
-
-    def track_to_tensor(self, track: Track):
-        return track.to_pianoroll(self.drums.pitch_to_id, self.resolution)
-
-
 class RelativeMultivariateTrackProcessor(TrackProcessorWithTempo):
     velocity_norm = 127  # max velocity
     time_norm = 100  # so duration and timeshift are closer to 0-5
@@ -117,6 +103,33 @@ class RelativeMultivariateTrackProcessor(TrackProcessorWithTempo):
 
     def output_dim(self):
         return (len(self.drums) + 3,)
+
+
+class PianoRollTrackProcessor(RelativeMultivariateTrackProcessor):
+    drums = DRUMS
+
+    def __init__(self, resolution: int = 24, use_tempo: bool = True):
+        super().__init__(use_tempo=use_tempo)
+        self.resolution = resolution
+
+    def short_name(self) -> str:
+        return f'pianoroll'
+
+    def track_to_tensor(self, track: Track):
+        notes = track.notes()
+        start = notes[0].start
+        end = notes[-1].end
+        length = end - start
+        num_steps = int(length * self.resolution)
+        piano_roll = torch.zeros(len(self.drums), num_steps)
+        for note in notes:
+            i_start = int((note.start - start) * self.resolution)
+            i_end = int((note.end - start) * self.resolution)
+            piano_roll[self.drums.pitch_to_id[note.pitch], i_start:i_end] = note.velocity / self.velocity_norm
+        return piano_roll.transpose(0, 1)  # change to (timestep, features)
+
+    def output_dim(self):
+        return (len(self.drums),)
 
 
 class TrackProcessors(Enum):
