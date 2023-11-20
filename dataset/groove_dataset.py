@@ -229,10 +229,10 @@ class GrooveMidiModule(L.LightningDataModule):
         _write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
 
         # Filter labels with less than min_tracks_per_label tracks in the train set
-        self.unique_labels = [
+        self.unique_labels = sorted([
             label for label, infos in self.label_infos.items()
             if infos[train_key]["tracks"] >= self.min_tracks_per_label
-        ]
+        ])
         self.label_to_id = {label: i for i, label in enumerate(self.unique_labels)}
         self.id_to_label = {i: label for label, i in self.label_to_id.items()}
         for split in split_keys:
