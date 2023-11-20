@@ -63,7 +63,7 @@ if __name__ == '__main__':
     domain = list(filter(is_valid, domain))
 
     random.seed(22)
-    random.shuffle(domain)
+    # random.shuffle(domain)
     START_AT = args.start_at
 
     for i, hparams in enumerate(domain):
