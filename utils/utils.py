@@ -217,11 +217,12 @@ def get_midi_paths(path: Path, return_sizes: bool = False):
         return paths
 
 
-def dump_json(d: dict, path: Path, create_parents: bool = False, **kwargs):
+def dump_json(d: dict, path: Path, create_parents: bool = False, overwrite: bool = True, **kwargs):
     if not path.name.endswith('.json'):
         raise ValueError(f"Path {path} must end with .json")
-    if create_parents:
-        path.parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=create_parents, exist_ok=True)
+    if not overwrite and path.exists():
+        raise FileExistsError(f"File {path} already exists.")
     with open(path, 'w') as f:
         json.dump(d, f, **kwargs)
 
