@@ -61,7 +61,7 @@ def parse_args() -> ScriptParameters:
     # Track processor group
     track_processor_group = parser.add_argument_group('Track processor')
     track_processor_group.add_argument('--track-processor', type=TrackProcessors.from_str, required=True, choices=list(TrackProcessors), help='Track processor type.')
-    track_processor_group.add_argument('--track-processor-pianoroll-resolution', type=int, default=20, help=f'Pianoroll resolution in steps per second (only for {TrackProcessors.pianoroll}).')
+    track_processor_group.add_argument('--track-processor-pianoroll-resolution', type=int, default=30, help=f'Pianoroll resolution in steps per second (only for {TrackProcessors.pianoroll}).')
 
     # Training group
     training_group = parser.add_argument_group('Training')
