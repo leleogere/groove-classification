@@ -79,7 +79,7 @@ if __name__ == '__main__':
             processed_data_path=args.processed_data_path,
             results_path=args.results_path,
             track_processor_type=TrackProcessors.from_str(hparams['TrackProcessorType']),
-            track_processor_pianoroll_resolution=hparams['PianorollResolution'],
+            track_processor_pianoroll_resolution=hparams['TrackProcessorPianorollResolution'],
             training_batch_size=256,
             training_num_epochs=200,
             training_patience=40,
