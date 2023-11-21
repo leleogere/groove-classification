@@ -33,15 +33,18 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     HYPERPARAMETERS = [
-        HyperParameter('LstmHiddenSize', [32]),
-        HyperParameter('LstmNumLayers', [2]),
-        # HyperParameter('DropoutRate', np.arange(0.1, 0.6, 0.2).tolist()),
-        HyperParameter('DropoutRate', [0.5]),
+        HyperParameter('TrackProcessorType', ['multivariate', 'pianoroll']),
+        HyperParameter('TrackProcessorPianorollResolution', [30]),
+        HyperParameter('LstmHiddenSize', [8, 16, 32, 64]),
+        HyperParameter('LstmNumLayers', [1, 2]),
+        HyperParameter('DropoutRate', [0.1, 0.3, 0.5]),
+        # HyperParameter('DropoutRate', [0.5]),
         # HyperParameter('lr', np.logspace(-4, -2, 3).tolist()),
         HyperParameter('lr', [1e-3]),
         # HyperParameter('reg', np.logspace(-4, -2, 3).tolist()),
-        HyperParameter('reg', [1e-4]),
-        HyperParameter('NumMeasures', [4]),
+        HyperParameter('reg', [1e-4, 5e-4]),
+        HyperParameter('NumMeasures', [1, 2, 4, 8]),
+        HyperParameter('MeasuresOverlap', [True, False]),
         HyperParameter('IMFW', [True, False]),
         HyperParameter('UseTempo', [True, False]),
         HyperParameter('UseAugmentedDataset', [True, False]),
@@ -58,12 +61,14 @@ if __name__ == '__main__':
             return False
         if not hps['UseAugmentedDataset'] and hps['NumAugmentations'] != 0:
             return False
+        if not hps['TrackProcessorType'] == 'pianoroll' and hps['TrackProcessorPianorollResolution'] != 30:
+            return False
         return True
 
     domain = list(filter(is_valid, domain))
 
     random.seed(22)
-    # random.shuffle(domain)
+    random.shuffle(domain)
     START_AT = args.start_at
 
     for i, hparams in enumerate(domain):
@@ -73,14 +78,14 @@ if __name__ == '__main__':
             data_path=args.data_path,
             processed_data_path=args.processed_data_path,
             results_path=args.results_path,
-            track_processor_type=TrackProcessors.from_str('multivariate'),
-            track_processor_pianoroll_resolution=10,
+            track_processor_type=TrackProcessors.from_str(hparams['TrackProcessorType']),
+            track_processor_pianoroll_resolution=hparams['PianorollResolution'],
             training_batch_size=256,
             training_num_epochs=200,
             training_patience=40,
             hp_use_tempo=hparams['UseTempo'],
             hp_num_measures=hparams['NumMeasures'],
-            hp_measures_overlap=False,
+            hp_measures_overlap=hparams['MeasuresOverlap'],
             hp_imfw=hparams['IMFW'],
             hp_use_augmented_dataset=hparams['UseAugmentedDataset'],
             hp_num_augmentations=hparams['NumAugmentations'],
