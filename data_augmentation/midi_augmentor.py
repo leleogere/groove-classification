@@ -140,8 +140,11 @@ class MidiAugmentor:
         Augment a MIDI dataset by generating variations of each track.
         :param dataset: Path to the MIDI dataset or list of tracks.
         :param out_path: Output directory. The structure of the dataset will be preserved.
+        :param include_original_track: Whether to include the original track in the output.
+        :param num_variations_per_track: Number of variations to generate for each track.
         :param only_if_doesnt_exist: Whether to skip files that already have an associated output directory (it doesn't
             mean that the chunks have already been computed, an error could have occurred during the previous process).
+        :param seed: Seed for the random number generator.
         :return: Dictionary mapping each MIDI path to its variations.
         """
         # Prepare output
