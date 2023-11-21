@@ -2,10 +2,8 @@ import copy
 import shutil
 from collections import defaultdict
 from pathlib import Path
-from typing import Sequence
 
 import numpy as np
-import pretty_midi as pm
 from scipy import stats
 from tqdm import tqdm
 
@@ -81,9 +79,7 @@ class MidiAugmentor:
         """
         # Read midi and associated information
         midi = load_and_validate_midi_file(midi_path, unique_track=True, unique_tempo=True, unique_time_signature=True)
-        track: pm.Instrument = midi.instruments[0]
         bpm = midi.get_tempo_changes()[1][0]
-        time_signature = midi.time_signature_changes[0]
 
         # Sample augmentation parameters
         if seed is None:
