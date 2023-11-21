@@ -57,8 +57,10 @@ class GenreClassifier(L.LightningModule):
         x, _ = self.lstm(x)
         # print(f'After LSTM: {x.shape = }')
         x = self.dropout(x[:, -1, :])
+        # print(f'After dropout: {x.shape = }')
         if self.use_tempo:
             x = torch.cat([x, tempo.unsqueeze(-1)], dim=-1)
+        # print(f'Before linear: {x.shape = }')
         x = self.linear(x)
         # print(f'End forward: {x.shape = }')
         return x
