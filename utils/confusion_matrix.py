@@ -30,7 +30,8 @@ def plot_confusion_matrix(cm, class_names, minimum=None, maximum=None, cmap=plt.
         plt.text(
             pred, true, format(cm[true, pred], fmt),
             horizontalalignment="center",
-            color="white" if cm[true, pred] > thresh else "black"
+            color="gainsboro" if cm[true, pred] > thresh else "dimgray",
+            fontsize=8,
         )
 
     plt.ylabel('True label')
@@ -77,9 +78,9 @@ def confusion_matrix_pipeline(y_true, y_pred, class_names, normalization=None, c
 
 
 if __name__ == '__main__':
-    y_true = np.array([1, 1, 2, 1, 1, 2, 0, 1, 2])
-    y_pred = np.array([0, 1, 0, 2, 1, 1, 0, 2, 2])
-    num_classes = 3
+    y_true = np.array([1, 1, 2, 1, 1, 2, 0, 1, 2, 3, 4, 5, 6, 7, 8])
+    y_pred = np.array([0, 1, 0, 2, 1, 1, 0, 2, 2, 3, 4, 5, 6, 7, 7])
+    num_classes = len(np.unique(np.concatenate([y_true, y_pred])))
     classes = [f"Class {i}" for i in range(num_classes)]
     cm = confusion_matrix(y_true, y_pred, normalize='true')
     fig = plot_confusion_matrix(cm, classes)
