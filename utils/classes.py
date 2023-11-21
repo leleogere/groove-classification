@@ -34,7 +34,7 @@ class DrumList:
 
 
 class AsDictMixin:
-    def __init__(self):
+    def __init__(self, _):
         pass
 
     def as_dict(self):
