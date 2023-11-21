@@ -1,4 +1,5 @@
 import copy
+import json
 import shutil
 from collections import defaultdict
 from pathlib import Path
@@ -8,7 +9,8 @@ from scipy import stats
 from tqdm import tqdm
 
 from utils.classes import Track
-from utils.utils import load_and_validate_midi_file, get_midi_paths, find_common_root
+from utils.utils import load_and_validate_midi_file, get_midi_paths, find_common_root, load_json, \
+    parse_bpm_from_file_name, dump_json
 
 
 def _chunk_filename(original_midi_path: Path, start_bar: int, num_bars: int, formatting_number_width: int):
@@ -37,6 +39,8 @@ def truncated_normal(
 
 
 class MidiAugmentor:
+    bpm_filename: str = 'bpm.json'
+
     def __init__(
             self,
             num_variations_per_track: int = 1,
@@ -68,13 +72,13 @@ class MidiAugmentor:
             path: Path,
             out_path: Path,
             seed: int | None = None,
-    ) -> None:
+    ) -> float:
         """
         Split a MIDI file into bars.
         :param path: Path to the MIDI file.
         :param out_path: Output directory. All chunks will be written in that directory.
         :param seed: Seed for the random number generator.
-        :return: List of paths to the chunks.
+        :return: Tempo of the new MIDI file.
         :todo: What if a note starts before the chunk but ends after the chunk?
         """
         # Read midi and associated information
@@ -126,6 +130,7 @@ class MidiAugmentor:
 
         # Write midi
         new_midi.write(str(out_path))
+        return bpm
 
     def augment_midi_dataset(
             self,
@@ -179,17 +184,29 @@ class MidiAugmentor:
         )
         for i, (midi_path, midi_size) in enumerate(zip(midi_paths, midi_sizes)):
             base_path = out_path / midi_path.relative_to(root_path).with_suffix('')
-            for variation in range(num_variations_per_track):
-                current_augmented_path = base_path / f"{midi_path.stem}_variation={variation}.mid"
-                augmented_file_paths[midi_path].append(current_augmented_path)
-                if only_if_doesnt_exist and current_augmented_path.exists():
-                    continue
-                current_augmented_path.parent.mkdir(parents=True, exist_ok=True)
-                self.augment_midi_file(midi_path, current_augmented_path, seed=int(seeds[i, variation]))
-            if include_original_track:
-                out_file = base_path / f"{midi_path.stem}_variation=original.mid"
-                shutil.copy(midi_path, out_file)
+            bpm_filepath = base_path / self.bpm_filename
+            bpm_infos = load_json(bpm_filepath) if bpm_filepath.exists() else {}
+            try:
+                for variation in range(num_variations_per_track):
+                    current_augmented_path = base_path / f"{midi_path.stem}_variation={variation}.mid"
+                    augmented_file_paths[midi_path].append(current_augmented_path)
+                    if only_if_doesnt_exist and current_augmented_path.exists():
+                        continue
+                    current_augmented_path.parent.mkdir(parents=True, exist_ok=True)
+                    new_bpm = self.augment_midi_file(midi_path, current_augmented_path, seed=int(seeds[i, variation]))
+                    bpm_infos[str(current_augmented_path)] = new_bpm
+                if include_original_track:
+                    out_file = base_path / f"{midi_path.stem}_variation=original.mid"
+                    shutil.copy(midi_path, out_file)
+                    augmented_file_paths[midi_path].append(out_file)
+                    bpm_infos[str(out_file)] = parse_bpm_from_file_name(midi_path.name)
+            except KeyboardInterrupt:
+                pbar.close()
+                dump_json(bpm_infos, bpm_filepath, overwrite=True, indent=4)
+                print(f"KeyboardInterrupt: BPM of current augmentations were saved in {bpm_filepath}")
+                raise
             pbar.update(midi_size)
+            dump_json(bpm_infos, bpm_filepath, overwrite=True, indent=4)
         pbar.close()
         return augmented_file_paths
 

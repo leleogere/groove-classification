@@ -16,7 +16,7 @@ from data_augmentation.midi_augmentor import MidiAugmentor
 from data_augmentation.midi_splitter import Splitter
 from data_processing.track_processors import TrackProcessor, RelativeMultivariateTrackProcessor
 from utils.constants import DRUMS
-from utils.utils import process_label, write_labels_info
+from utils.utils import process_label, write_labels_info, load_json
 from utils.classes import Track
 
 
@@ -131,11 +131,24 @@ def augment_midi_dataset(
         num_variations_per_track=num_augmentations,
         only_if_doesnt_exist=not force_augmentation_recomputation,
     )
+    # new_tracks = [
+    #     Track.from_partial(track, midi_path=augmented_path)
+    #     for track in dataset.tracks
+    #     for augmented_path in augmented_file_paths[track.midi_path]
+    # ]
+    bpm_files = {}
+    def get_bpm(file_path: Path):
+        parent = file_path.parent
+        if parent not in bpm_files:
+            bpm_files[parent] = load_json(parent / MidiAugmentor.bpm_filename)
+        return bpm_files[parent][str(file_path)]
+
     new_tracks = [
-        Track.from_partial(track, midi_path=augmented_path)
+        Track.from_partial(track, midi_path=augmented_path, bpm=get_bpm(augmented_path))
         for track in dataset.tracks
         for augmented_path in augmented_file_paths[track.midi_path]
     ]
+    del bpm_files
     if not in_place:
         dataset = dataset.copy()
     dataset.tracks = new_tracks
