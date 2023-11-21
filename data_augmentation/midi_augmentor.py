@@ -65,20 +65,20 @@ class MidiAugmentor:
 
     def augment_midi_file(
             self,
-            midi_path: Path,
+            path: Path,
             out_path: Path,
             seed: int | None = None,
     ) -> None:
         """
         Split a MIDI file into bars.
-        :param midi_path: Path to the MIDI file.
+        :param path: Path to the MIDI file.
         :param out_path: Output directory. All chunks will be written in that directory.
         :param seed: Seed for the random number generator.
         :return: List of paths to the chunks.
         :todo: What if a note starts before the chunk but ends after the chunk?
         """
         # Read midi and associated information
-        midi = load_and_validate_midi_file(midi_path, unique_track=True, unique_tempo=True, unique_time_signature=True)
+        midi = load_and_validate_midi_file(path, unique_track=True, unique_tempo=True, unique_time_signature=True)
         bpm = midi.get_tempo_changes()[1][0]
 
         # Sample augmentation parameters
@@ -195,13 +195,12 @@ class MidiAugmentor:
 
 
 if __name__ == '__main__':
-    midi_path = Path('data/groove/drummer1/eval_session/1_funk-groove1_138_beat_4-4.mid')
-    # midi_path = Path('data/groove_augmented/drummer5/session1/8_latin-venezuelan-merengue_162_beat_5-8/8_latin-venezuelan-merengue_162_beat_5-8_variation=7.mid')
-    # midi_path = Path('data/groove/drummer10/session1/1_jazz-swing_124_beat_4-4.mid')
-    # midi_path = Path('groove_light/drummer1/eval_session/4_soul-groove4_80_beat_4-4.mid')
-    # midi_path = Path('groove/drummer7/session2/22_rock_118_beat_4-4.mid')
-    # midi_path = Path('groove/drummer2/session3/1_rock-shuffle_85_beat_4-4.mid')
-    # midi_path = Path('groove/drummer1/session2/111_rock-prog_110_beat_5-4.mid')
+    test_midi_path = Path('data/groove/drummer1/eval_session/1_funk-groove1_138_beat_4-4.mid')
+    # test_midi_path = Path('data/groove_augmented/drummer5/session1/8_latin-venezuelan-merengue_162_beat_5-8/8_latin-venezuelan-merengue_162_beat_5-8_variation=7.mid')
+    # test_midi_path = Path('data/groove/drummer10/session1/1_jazz-swing_124_beat_4-4.mid')
+    # test_midi_path = Path('groove_light/drummer1/eval_session/4_soul-groove4_80_beat_4-4.mid')
+    # test_midi_path = Path('groove/drummer7/session2/22_rock_118_beat_4-4.mid')
+    # test_midi_path = Path('groove/drummer2/session3/1_rock-shuffle_85_beat_4-4.mid')
+    # test_midi_path = Path('groove/drummer1/session2/111_rock-prog_110_beat_5-4.mid')
     augmentor = MidiAugmentor(num_variations_per_track=5, gaussian_parameters_for_tempo_variation=(0, 30))
-    # splitter(midi_path, out_path=Path('/tmp/tests'))
-    augmentor.augment_midi_dataset(midi_path.parent, out_path=Path('/tmp/tests'), only_if_doesnt_exist=True)
+    augmentor.augment_midi_dataset(test_midi_path.parent, out_path=Path('/tmp/tests'), only_if_doesnt_exist=True)

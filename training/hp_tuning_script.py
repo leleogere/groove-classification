@@ -53,10 +53,10 @@ if __name__ == '__main__':
         for x in itertools.product(*map(lambda hp: hp.values, HYPERPARAMETERS))
     )  # See https://stackoverflow.com/questions/5228158/cartesian-product-of-a-dictionary-of-lists/40623158
 
-    def is_valid(hparams: dict) -> bool:
-        if hparams['UseAugmentedDataset'] and hparams['NumAugmentations'] == 0:
+    def is_valid(hps: dict) -> bool:
+        if hps['UseAugmentedDataset'] and hps['NumAugmentations'] == 0:
             return False
-        if not hparams['UseAugmentedDataset'] and hparams['NumAugmentations'] != 0:
+        if not hps['UseAugmentedDataset'] and hps['NumAugmentations'] != 0:
             return False
         return True
 

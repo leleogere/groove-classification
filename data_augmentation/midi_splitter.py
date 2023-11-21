@@ -67,17 +67,17 @@ class Splitter:
         else:
             return non_sliding_window(list(range(0, num_measures)), window_size=self.num_measures_per_chunk)
 
-    def split_midi_file(self, midi_path: Path, out_path: Path, pbar: bool = False) -> list[Path]:
+    def split_midi_file(self, path: Path, out_path: Path, pbar: bool = False) -> list[Path]:
         """
         Split a MIDI file into bars.
-        :param midi_path: Path to the MIDI file.
+        :param path: Path to the MIDI file.
         :param out_path: Output directory. All chunks will be written in that directory.
         :param pbar: Whether to display the note progression.
         :return: List of paths to the chunks.
         :todo: What if a note starts before the chunk but ends after the chunk?
         """
         # Read midi and associated information
-        midi = load_and_validate_midi_file(midi_path, unique_track=True, unique_tempo=True, unique_time_signature=True)
+        midi = load_and_validate_midi_file(path, unique_track=True, unique_tempo=True, unique_time_signature=True)
         track: pm.Instrument = midi.instruments[0]
         bpm = midi.get_tempo_changes()[1][0]
         time_signature = midi.time_signature_changes[0]
@@ -103,7 +103,7 @@ class Splitter:
         ]
         num_chunks = len(chunk_time_starts_and_ends)
         if num_chunks == 0:
-            print(f'No chunks in {midi_path}.')
+            print(f'No chunks in {path}.')
             return []
         measure_idx_to_chunk_idxs = {
             i: [j for j, measures in enumerate(chunk_measures) if i in measures]
@@ -148,7 +148,7 @@ class Splitter:
             if not chunk.instruments[0].notes:
                 continue
             chunk_file_path = out_path / _chunk_filename(
-                original_midi_path=midi_path,
+                original_midi_path=path,
                 start_bar=chunk_measures_starts_and_ends[i][0],
                 num_bars=len(chunk_measures[i]),
                 formatting_number_width=formatting_number_width
@@ -223,13 +223,13 @@ class Splitter:
 
 
 if __name__ == '__main__':
-    # midi_path = Path('data/groove/drummer1/eval_session/1_funk-groove1_138_beat_4-4.mid')
-    # midi_path = Path('data/groove_augmented/drummer5/session1/8_latin-venezuelan-merengue_162_beat_5-8/8_latin-venezuelan-merengue_162_beat_5-8_variation=7.mid')
-    midi_path = Path('data/groove/drummer10/session1/1_jazz-swing_124_beat_4-4.mid')
-    # midi_path = Path('groove_light/drummer1/eval_session/4_soul-groove4_80_beat_4-4.mid')
-    # midi_path = Path('groove/drummer7/session2/22_rock_118_beat_4-4.mid')
-    # midi_path = Path('groove/drummer2/session3/1_rock-shuffle_85_beat_4-4.mid')
-    # midi_path = Path('groove/drummer1/session2/111_rock-prog_110_beat_5-4.mid')
+    # test_midi_path = Path('data/groove/drummer1/eval_session/1_funk-groove1_138_beat_4-4.mid')
+    # test_midi_path = Path('data/groove_augmented/drummer5/session1/8_latin-venezuelan-merengue_162_beat_5-8/8_latin-venezuelan-merengue_162_beat_5-8_variation=7.mid')
+    test_midi_path = Path('data/groove/drummer10/session1/1_jazz-swing_124_beat_4-4.mid')
+    # test_midi_path = Path('groove_light/drummer1/eval_session/4_soul-groove4_80_beat_4-4.mid')
+    # test_midi_path = Path('groove/drummer7/session2/22_rock_118_beat_4-4.mid')
+    # test_midi_path = Path('groove/drummer2/session3/1_rock-shuffle_85_beat_4-4.mid')
+    # test_midi_path = Path('groove/drummer1/session2/111_rock-prog_110_beat_5-4.mid')
     splitter = Splitter(num_measures_per_chunk=1, chunk_overlap=False)
-    # splitter(midi_path, out_path=Path('/tmp/tests'))
-    splitter(midi_path, out_path=Path('/tmp/tests'))
+    # splitter(test_midi_path, out_path=Path('/tmp/tests'))
+    splitter(test_midi_path, out_path=Path('/tmp/tests'))
