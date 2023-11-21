@@ -3,7 +3,7 @@ from typing import Callable
 import lightning as L
 import torch
 from torch import nn
-from torchmetrics.classification import MulticlassAccuracy, MulticlassF1Score
+from torchmetrics.classification import MulticlassF1Score
 
 from utils.confusion_matrix import confusion_matrix_pipeline
 

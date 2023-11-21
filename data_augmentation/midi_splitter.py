@@ -1,4 +1,3 @@
-import copy
 from collections import defaultdict
 from pathlib import Path
 from typing import Sequence

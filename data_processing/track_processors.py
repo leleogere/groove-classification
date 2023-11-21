@@ -1,13 +1,11 @@
-import inspect
 from collections import defaultdict
 from enum import Enum
-from typing import Any
 
 import torch
 from torch import nn, LongTensor
 
-from utils.constants import DRUMS
 from utils.classes import Track, RelativeNote, ProcessedTrack
+from utils.constants import DRUMS
 
 
 class TrackProcessor:
