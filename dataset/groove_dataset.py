@@ -14,7 +14,7 @@ from data_augmentation.midi_augmentor import MidiAugmentor
 from data_augmentation.midi_splitter import Splitter
 from data_processing.track_processors import TrackProcessor, RelativeMultivariateTrackProcessor
 from utils.constants import DRUMS
-from utils.utils import process_label, _write_labels_info
+from utils.utils import process_label, write_labels_info
 from utils.classes import Track
 
 
@@ -226,7 +226,7 @@ class GrooveMidiModule(L.LightningDataModule):
             )
             for track in datasets[split].tracks:
                 self.label_infos[track.label][split]["tracks"] += 1
-        _write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
+        write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
 
         # Filter labels with less than min_tracks_per_label tracks in the train set
         self.unique_labels = sorted([
@@ -240,7 +240,7 @@ class GrooveMidiModule(L.LightningDataModule):
             for track in datasets[split].tracks:
                 self.label_infos[track.label][split]["filtered"] += 1
                 track.label_idx = self.label_to_id[track.label]
-        _write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
+        write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
 
         # Augment dataset if needed
         if self.augment_dataset:
@@ -256,7 +256,7 @@ class GrooveMidiModule(L.LightningDataModule):
             for split in split_keys:
                 for track in datasets[split].tracks:
                     self.label_infos[track.label][split]["augmented"] += 1
-            _write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
+            write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
 
         # Split dataset into measures if needed
         if self.split_dataset_into_measures:
@@ -273,7 +273,7 @@ class GrooveMidiModule(L.LightningDataModule):
                 split_midi_dataset(datasets[split], in_place=True, **self.split_dataset_into_measures_kwargs)
                 for track in datasets[split].tracks:
                     self.label_infos[track.label][split]["chunks"] += 1
-            _write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
+            write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
 
         # Set attributes
         self.train_dataset = datasets[train_key]

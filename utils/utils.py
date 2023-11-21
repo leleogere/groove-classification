@@ -90,7 +90,7 @@ def find_common_root(paths: list[Path]) -> Path:
     return Path(os.path.commonpath(paths))
 
 
-def _write_labels_info(infos: dict[str, dict[str, dict[str, object]]], path: Path, tablefmt: str = 'rounded_outline'):
+def write_labels_info(infos: dict[str, dict[str, dict[str, object]]], path: Path, tablefmt: str = 'rounded_outline'):
     def unique_list(iter: Iterable):
         return list(dict.fromkeys(iter))
     infos = copy.deepcopy(infos)
