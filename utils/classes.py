@@ -58,7 +58,7 @@ class Note(AsDictMixin):
 
 
 @dataclass(slots=True)
-class RelativeNote:
+class RelativeNote(AsDictMixin):
     pitch: int
     velocity: float
     duration: float
