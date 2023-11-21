@@ -1,4 +1,4 @@
-from utils.utils import DrumList, Drum
+from utils.classes import DrumList, Drum
 
 DRUMS = DrumList([
     Drum(pitch=22, id=0, name="HH Closed (Edge)"),
