@@ -87,12 +87,12 @@ class GenreClassifier(L.LightningModule):
         x = batch['samples']
         y = batch['labels']
         tempo = batch['tempos'] if self.use_tempo else None
-        # Use model
+        # Apply model
         y_hat = self.forward(x, tempo)
         y_pred = torch.argmax(y_hat, dim=-1)
         loss = self.criterion(y_hat, y)
         self.log('val/loss', loss, on_step=False, on_epoch=True, prog_bar=True)
-        # Keep prediction for global metrics
+        # Accumulate prediction for global metrics
         self.val_y_trues.append(y)
         self.val_y_preds.append(y_pred)
         return loss
