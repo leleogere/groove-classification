@@ -65,6 +65,16 @@ class GenreClassifier(L.LightningModule):
         # print(f'End forward: {x.shape = }')
         return x
 
+    def configure_optimizers(self):
+        return torch.optim.Adam(self.parameters(), lr=self.lr)
+
+    def on_train_start(self) -> None:
+        to_log = {}
+        for part in ['train', 'val']:
+            to_log.update({f"{part}/{k}": float('NaN') for k in self.metrics.keys()})
+            to_log.update({f"{part}/loss": float('NaN')})
+        self.logger.log_hyperparams(self.hparams, metrics=to_log)
+
     def training_step(self, batch, batch_idx):
         x = batch['samples']
         y = batch['labels']
@@ -79,8 +89,10 @@ class GenreClassifier(L.LightningModule):
         self.log_dict({f'train/{k}': v for k, v in metrics_dict.items()}, on_step=False, on_epoch=True, prog_bar=True)
         return loss
 
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+    def on_validation_epoch_start(self) -> None:
+        super().on_validation_epoch_start()
+        self.val_y_trues = []
+        self.val_y_preds = []
 
     def validation_step(self, batch, batch_idx):
         # Get data
@@ -95,19 +107,6 @@ class GenreClassifier(L.LightningModule):
         self.val_y_trues.append(y)
         self.val_y_preds.append(torch.argmax(y_hat, dim=-1))
         return loss
-
-    def on_train_start(self) -> None:
-        to_log = {}
-        for part in ['train', 'val']:
-            to_log.update({f"{part}/{k}": float('NaN') for k in self.metrics.keys()})
-            to_log.update({f"{part}/loss": float('NaN')})
-        self.logger.log_hyperparams(self.hparams, metrics=to_log)
-
-    def on_validation_epoch_start(self) -> None:
-        super().on_validation_epoch_start()
-        self.val_y_trues = []
-        self.val_y_preds = []
-        return
 
     def on_validation_epoch_end(self):
         super().on_validation_epoch_end()
