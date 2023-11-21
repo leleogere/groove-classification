@@ -11,8 +11,8 @@ def plot_confusion_matrix(cm, class_names, minimum=None, maximum=None, cmap=plt.
     Normalization can be applied by setting `normalize=True`.
     :param cm: Confusion matrix
     :param class_names: List of classes
-    :param min: Minimum value for the color map
-    :param max: Maximum value for the color map
+    :param minimum: Minimum value for the color map
+    :param maximum: Maximum value for the color map
     :param cmap: Color map to use
     """
 
