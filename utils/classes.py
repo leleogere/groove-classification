@@ -34,6 +34,8 @@ class DrumList:
 
 
 class AsDictMixin:
+    __slots__: list[str]
+
     def __init__(self, _):
         pass
 
