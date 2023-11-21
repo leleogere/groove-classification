@@ -14,7 +14,8 @@ from data_augmentation.midi_augmentor import MidiAugmentor
 from data_augmentation.midi_splitter import Splitter
 from data_processing.track_processors import TrackProcessor, RelativeMultivariateTrackProcessor
 from utils.constants import DRUMS
-from utils.utils import process_label, Track, _write_labels_info
+from utils.utils import process_label, _write_labels_info
+from utils.classes import Track
 
 
 ############

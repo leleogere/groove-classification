@@ -7,7 +7,7 @@ import torch
 from torch import nn, LongTensor
 
 from utils.constants import DRUMS
-from utils.utils import Track, RelativeNote, ProcessedTrack
+from utils.classes import Track, RelativeNote, ProcessedTrack
 
 
 class TrackProcessor:

@@ -9,7 +9,7 @@ import pretty_midi as pm
 from scipy import stats
 from tqdm import tqdm
 
-from utils.utils import Track
+from utils.classes import Track
 from utils.utils import load_and_validate_midi_file, get_midi_paths, find_common_root
 
 
