@@ -263,10 +263,13 @@ class GrooveMidiModule(L.LightningDataModule):
                 raise ValueError(
                     "You must specify the 'split_path' argument in 'dataset_class_kwargs' to split the dataset."
                 )
-            sub_folder_prefix = f"augmentations={self.augment_dataset_kwargs['num_augmentations']}_" if self.augment_dataset else ""
+            split_folder_name_elements = [
+                f"augmentations={self.augment_dataset_kwargs['num_augmentations']}",
+                f"measures={self.split_dataset_into_measures_kwargs['num_measures_per_chunk']}",
+                f"overlap={self.split_dataset_into_measures_kwargs['chunk_overlap']}",
+            ]
             self.split_dataset_into_measures_kwargs['split_path'] = (
-                    self.split_dataset_into_measures_kwargs['split_path']
-                    / f"{sub_folder_prefix}measures={self.split_dataset_into_measures_kwargs['num_measures_per_chunk']}"
+                    self.split_dataset_into_measures_kwargs['split_path'] / "_".join(split_folder_name_elements)
             )
             for split in split_keys:
                 split_midi_dataset(datasets[split], in_place=True, **self.split_dataset_into_measures_kwargs)
