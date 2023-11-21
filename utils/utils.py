@@ -3,6 +3,7 @@ import json
 import os.path
 from pathlib import Path
 from typing import Iterable
+import re
 
 import pretty_midi as pm
 import tabulate
@@ -28,6 +29,15 @@ def process_label(raw_label: str, keep_sublabel_for: list[str] | None = None) ->
         return main_label
     else:
         return raw_label
+
+
+def parse_bpm_from_file_name(file_name: str) -> float:
+    """
+    Parse the BPM from a file name like that: 1_funk-groove1_138_beat_4-4.mid
+    :param file_name: File name.
+    :return: BPM.
+    """
+    return float(re.search(r'\d+_[a-z0-9\-]+_(\d+|\d+\.\d+)_.*\.mid', file_name).group(1))
 
 
 def load_and_validate_midi_file(
