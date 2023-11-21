@@ -9,6 +9,9 @@ from utils.confusion_matrix import confusion_matrix_pipeline
 
 
 class GenreClassifier(L.LightningModule):
+    _train_key = 'train'
+    _val_key = 'val'
+
     def __init__(
             self,
             num_features: int,
@@ -51,6 +54,8 @@ class GenreClassifier(L.LightningModule):
         })
         if hparams_to_log is not None:
             self.save_hyperparameters(hparams_to_log)
+        self.accumulated_predictions = {}
+        self._reset_accumulated_predictions()
 
     def forward(self, x, tempo=None):
         # print(f'Before LSTM: {x.shape = }')
@@ -68,54 +73,56 @@ class GenreClassifier(L.LightningModule):
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
 
-    def on_train_start(self) -> None:
-        to_log = {}
-        for part in ['train', 'val']:
-            to_log.update({f"{part}/{k}": float('NaN') for k in self.metrics.keys()})
-            to_log.update({f"{part}/loss": float('NaN')})
-        self.logger.log_hyperparams(self.hparams, metrics=to_log)
-
-    def training_step(self, batch, batch_idx):
-        x = batch['samples']
-        y = batch['labels']
-        tempo = batch['tempos'] if self.use_tempo else None
-        y_hat = self.forward(x, tempo)
-        # Compute loss
-        loss = self.criterion(y_hat, y)
-        # Compute metrics
-        metrics_dict = {k: v(y_hat, y) for k, v in self.metrics.items()}
-        metrics_dict['loss'] = loss
-        # Log metrics
-        self.log_dict({f'train/{k}': v for k, v in metrics_dict.items()}, on_step=False, on_epoch=True, prog_bar=True)
-        return loss
-
-    def on_validation_epoch_start(self) -> None:
-        super().on_validation_epoch_start()
-        self.val_y_trues = []
-        self.val_y_preds = []
-
-    def validation_step(self, batch, batch_idx):
+    def common_step(self, batch, key: str):
         # Get data
         x = batch['samples']
         y = batch['labels']
         tempo = batch['tempos'] if self.use_tempo else None
         # Apply model
         y_hat = self.forward(x, tempo)
+        # Compute and log loss
         loss = self.criterion(y_hat, y)
-        self.log('val/loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log(f'{key}/loss', loss, on_step=False, on_epoch=True, prog_bar=True)
         # Accumulate prediction for global metrics
-        self.val_y_trues.append(y)
-        self.val_y_preds.append(torch.argmax(y_hat, dim=-1))
+        self.accumulated_predictions[key]['y_true'].append(y)
+        self.accumulated_predictions[key]['y_pred'].append(torch.argmax(y_hat, dim=-1))
         return loss
 
-    def on_validation_epoch_end(self):
-        super().on_validation_epoch_end()
-        y_true = torch.cat(self.val_y_trues, dim=0)
-        self.val_y_trues = []
-        y_pred = torch.cat(self.val_y_preds, dim=0)
-        self.val_y_preds = []
+    def training_step(self, batch, batch_idx):
+        return self.common_step(batch, self._train_key)
+
+    def validation_step(self, batch, batch_idx):
+        return self.common_step(batch, self._val_key)
+
+    def on_common_epoch_end(self, key: str):
+        y_true = torch.cat(self.accumulated_predictions[key]['y_true'], dim=0)
+        y_pred = torch.cat(self.accumulated_predictions[key]['y_pred'], dim=0)
         # Compute metrics
         metrics_dict = {k: v(y_pred, y_true) for k, v in self.metrics.items()}
-        self.log_dict({f'val/{k}': v for k, v in metrics_dict.items()}, on_step=False, on_epoch=True, prog_bar=True)
+        self.log_dict({f'{key}/{k}': v for k, v in metrics_dict.items()}, on_step=False, on_epoch=True, prog_bar=True)
         image = confusion_matrix_pipeline(y_true.cpu(), y_pred.cpu(), self.class_names, normalization='true').transpose((2, 0, 1))
-        self.logger.experiment.add_image('val_confusion_matrix', image, self.current_epoch)
+        self.logger.experiment.add_image(f'{key}_confusion_matrix', image, self.current_epoch)
+        # Reset accumulated predictions
+        self._reset_accumulated_predictions(key)
+
+    def on_train_epoch_end(self):
+        self.on_common_epoch_end(self._train_key)
+
+    def on_validation_epoch_end(self):
+        self.on_common_epoch_end(self._val_key)
+
+    def on_train_start(self) -> None:
+        # Log hyperparameters with first dummy metrics in order for them to appear in TensorBoard
+        to_log = {}
+        for part in ['train', 'val']:
+            to_log.update({f"{part}/{k}": float('NaN') for k in self.metrics.keys()})
+            to_log.update({f"{part}/loss": float('NaN')})
+        self.logger.log_hyperparams(self.hparams, metrics=to_log)
+
+    def _reset_accumulated_predictions(self, key: str | None = None):
+        def default_dict():
+            return {'y_true': [], 'y_pred': []}
+        if key is None:
+            self.accumulated_predictions = {k: default_dict() for k in [self._train_key, self._val_key]}
+        else:
+            self.accumulated_predictions[key] = default_dict()
