@@ -1,10 +1,12 @@
+import copy
 import csv
 from collections import defaultdict
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterable
 from urllib.request import urlretrieve
 import zipfile
 
+import tabulate
 from joblib import Memory
 
 import lightning as L
@@ -239,7 +241,6 @@ class GrooveMidiModule(L.LightningDataModule):
             for track in datasets[split].tracks:
                 self.label_infos[track.label][split]["filtered"] += 1
                 track.label_idx = self.label_to_id[track.label]
-        write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
 
         # Augment dataset if needed
         if self.augment_dataset:
@@ -255,7 +256,6 @@ class GrooveMidiModule(L.LightningDataModule):
             for split in split_keys:
                 for track in datasets[split].tracks:
                     self.label_infos[track.label][split]["augmented"] += 1
-            write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
 
         # Split dataset into measures if needed
         if self.split_dataset_into_measures:
@@ -272,7 +272,6 @@ class GrooveMidiModule(L.LightningDataModule):
                 split_midi_dataset(datasets[split], in_place=True, **self.split_dataset_into_measures_kwargs)
                 for track in datasets[split].tracks:
                     self.label_infos[track.label][split]["chunks"] += 1
-            write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
 
         # Set attributes
         self.train_dataset = datasets[train_key]
@@ -307,6 +306,27 @@ class GrooveMidiModule(L.LightningDataModule):
             collate_fn=self.track_processor.collate_fn,
             num_workers=self.num_workers,
         )
+
+    def export_label_infos(self, path: Path, tablefmt: str = 'rounded_outline') -> None:
+        def unique_list(it: Iterable):
+            return list(dict.fromkeys(it))
+        infos = copy.deepcopy(self.label_infos)
+        labels = unique_list(label for label in infos)
+        splits = unique_list(split for label in infos for split in infos[label])
+        fields = unique_list(field for label in infos for split in infos[label] for field in infos[label][split])
+        # add split "Total" to dict infos
+        for label in infos:
+            for field in infos[label][splits[0]]:
+                infos[label]['total'][field] = sum(infos[label][split][field] for split in splits)
+        splits.insert(0, 'total')
+        with open(path, 'w') as f:
+            for split in splits:
+                f.write(f'{split}\n')
+                table = []
+                for label in labels:
+                    table.append([label] + [infos[label][split][field] for field in fields])
+                f.write(tabulate.tabulate(table, headers=['label'] + list(fields), tablefmt=tablefmt))
+                f.write('\n\n')
 
 
 if __name__ == "__main__":

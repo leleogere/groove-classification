@@ -1,4 +1,5 @@
 from datetime import datetime
+from pathlib import Path
 
 import torch
 import lightning as L
@@ -90,6 +91,9 @@ def main(params: ScriptParameters):
         name=datetime.now().strftime("%Y-%m-%d"),
         default_hp_metric=False
     )
+    logger_dir = Path(logger.log_dir)
+    logger_dir.mkdir(parents=True, exist_ok=False)
+    groove_module.export_label_infos(logger_dir / "label_infos.txt")
 
     # Train model
     print("Training model...")
