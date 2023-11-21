@@ -45,8 +45,9 @@ class GenreClassifier(L.LightningModule):
         self.class_names = class_names if class_names is not None else [f"Class_{i}" for i in range(num_classes)]
         self.criterion = loss_function
         self.metrics = nn.ModuleDict({
-            "acc": MulticlassAccuracy(num_classes=num_classes),
-            "f1": MulticlassF1Score(num_classes=num_classes, average='macro'),
+            "f1_macro": MulticlassF1Score(num_classes=num_classes, average='macro'),
+            "f1_micro": MulticlassF1Score(num_classes=num_classes, average='micro'),
+            "f1_weighted": MulticlassF1Score(num_classes=num_classes, average='weighted'),
         })
         if hparams_to_log is not None:
             self.save_hyperparameters(hparams_to_log)
