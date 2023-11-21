@@ -89,12 +89,11 @@ class GenreClassifier(L.LightningModule):
         tempo = batch['tempos'] if self.use_tempo else None
         # Apply model
         y_hat = self.forward(x, tempo)
-        y_pred = torch.argmax(y_hat, dim=-1)
         loss = self.criterion(y_hat, y)
         self.log('val/loss', loss, on_step=False, on_epoch=True, prog_bar=True)
         # Accumulate prediction for global metrics
         self.val_y_trues.append(y)
-        self.val_y_preds.append(y_pred)
+        self.val_y_preds.append(torch.argmax(y_hat, dim=-1))
         return loss
 
     def on_train_start(self) -> None:
