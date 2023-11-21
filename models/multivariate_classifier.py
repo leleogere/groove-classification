@@ -8,7 +8,7 @@ from torchmetrics.classification import MulticlassAccuracy, MulticlassF1Score
 from utils.confusion_matrix import confusion_matrix_pipeline
 
 
-class MultivariateClassifier(L.LightningModule):
+class GenreClassifier(L.LightningModule):
     def __init__(
             self,
             num_features: int,

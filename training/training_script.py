@@ -6,7 +6,7 @@ import lightning.pytorch as pl
 
 from dataset.groove_dataset import GrooveMidiModule
 from data_processing.track_processors import TrackProcessor
-from models.multivariate_classifier import MultivariateClassifier
+from models.multivariate_classifier import GenreClassifier
 from cli.parser import ScriptParameters, parse_args
 
 
@@ -65,7 +65,7 @@ def main(params: ScriptParameters):
     loss = torch.nn.CrossEntropyLoss(weight=weights_c)
 
     # Create model
-    model = MultivariateClassifier(
+    model = GenreClassifier(
         num_features=track_processor.output_dim()[0],
         lstm_hidden_size=params.hp_lstm_hidden_size,
         lstm_num_layers=params.hp_lstm_num_layers,
