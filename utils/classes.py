@@ -26,8 +26,8 @@ class DrumList:
     def drum_from_pitch(self, pitch: int) -> Drum:
         return self._pitch_to_percussion[pitch]
 
-    def drum_from_id(self, id: int) -> Drum:
-        return self._id_to_percussion[id]
+    def drum_from_id(self, drum_id: int) -> Drum:
+        return self._id_to_percussion[drum_id]
 
     def __len__(self):
         return len(self.drums)

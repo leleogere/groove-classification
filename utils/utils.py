@@ -91,8 +91,8 @@ def find_common_root(paths: list[Path]) -> Path:
 
 
 def write_labels_info(infos: dict[str, dict[str, dict[str, object]]], path: Path, tablefmt: str = 'rounded_outline'):
-    def unique_list(iter: Iterable):
-        return list(dict.fromkeys(iter))
+    def unique_list(it: Iterable):
+        return list(dict.fromkeys(it))
     infos = copy.deepcopy(infos)
     labels = unique_list(label for label in infos)
     splits = unique_list(split for label in infos for split in infos[label])
