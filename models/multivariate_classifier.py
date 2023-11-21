@@ -42,7 +42,7 @@ class GenreClassifier(L.LightningModule):
         self.lr = lr
         self.num_classes = num_classes
         self.name = name
-        self.class_names = class_names if class_names is not None else [str(i) for i in range(num_classes)]
+        self.class_names = class_names if class_names is not None else [f"Class_{i}" for i in range(num_classes)]
         self.criterion = loss_function
         self.metrics = nn.ModuleDict({
             "acc": MulticlassAccuracy(num_classes=num_classes),
