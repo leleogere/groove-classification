@@ -185,7 +185,15 @@ class MidiAugmentor:
         for i, (midi_path, midi_size) in enumerate(zip(midi_paths, midi_sizes)):
             base_path = out_path / midi_path.relative_to(root_path).with_suffix('')
             bpm_filepath = base_path / self.bpm_filename
-            bpm_infos = load_json(bpm_filepath) if bpm_filepath.exists() else {}
+            if bpm_filepath.exists():
+                try:
+                    bpm_infos = load_json(bpm_filepath)
+                except json.decoder.JSONDecodeError:
+                    print(f"Error while loading {midi_path} variations. Deleting the directory and restarting.")
+                    bpm_infos = {}
+                    shutil.rmtree(base_path)
+            else:
+                bpm_infos = {}
             try:
                 for variation in range(num_variations_per_track):
                     current_augmented_path = base_path / f"{midi_path.stem}_variation={variation}.mid"
@@ -200,13 +208,13 @@ class MidiAugmentor:
                     shutil.copy(midi_path, out_file)
                     augmented_file_paths[midi_path].append(out_file)
                     bpm_infos[str(out_file)] = parse_bpm_from_file_name(midi_path.name)
+                pbar.update(midi_size)
+                dump_json(bpm_infos, bpm_filepath, overwrite=True, indent=4)
             except KeyboardInterrupt:
                 pbar.close()
                 dump_json(bpm_infos, bpm_filepath, overwrite=True, indent=4)
                 print(f"KeyboardInterrupt: BPM of current augmentations were saved in {bpm_filepath}")
                 raise
-            pbar.update(midi_size)
-            dump_json(bpm_infos, bpm_filepath, overwrite=True, indent=4)
         pbar.close()
         return augmented_file_paths
 
