@@ -94,7 +94,7 @@ if __name__ == '__main__':
             hp_dropout_rate=hparams['DropoutRate'],
             hp_lr=hparams['lr'],
             hp_reg=hparams['reg'],
-            min_tracks_per_label=30,
+            min_tracks_per_label=20,
         )
         print("=" * 80)
         print(f'Running {i + 1}/{len(domain)}: {params.__dict__}')
