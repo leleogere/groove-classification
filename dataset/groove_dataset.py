@@ -77,6 +77,7 @@ class GrooveMidiDataset(TrackDataset):
                     split=row["split"],
                 )
                 for row in self._metadata
+                if row["beat_type"] == "beat"
             ],
             filter_tracks=filter_tracks,
             track_processor=track_processor,
