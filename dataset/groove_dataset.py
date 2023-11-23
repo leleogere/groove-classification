@@ -174,7 +174,7 @@ class GrooveMidiModule(L.LightningDataModule):
             path: Path,
             batch_size: int = 128,
             track_processor: TrackProcessor | None = None,
-            min_tracks_per_label: int = 30,
+            min_tracks_per_label: int = 20,
             cache_location: Path = Path("/tmp"),
             split_dataset_into_measures: bool = False,
             split_dataset_into_measures_kwargs: dict = None,
