@@ -97,7 +97,7 @@ def main(params: ScriptParameters):
 
     # Train model
     print("Training model...")
-    trainer = L.Trainer(max_epochs=params.training_num_epochs, logger=logger, callbacks=[early_stopping])
+    trainer = L.Trainer(max_epochs=params.training_num_epochs, logger=logger, callbacks=[early_stopping], devices=1)
     trainer.fit(model, datamodule=groove_module)
 
 
