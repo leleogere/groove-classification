@@ -97,7 +97,7 @@ if __name__ == '__main__':
             min_tracks_per_label=20,
         )
         print("=" * 80)
-        print(f'Running {i + 1}/{len(domain)}: {params.__dict__}')
+        print(f'Running {i + 1}/{len(domain)}:\n{pformat(params.__dict__)}')
         main(params)
         if Path("/tmp/groove-stop").exists():
             print("Stopping early")
