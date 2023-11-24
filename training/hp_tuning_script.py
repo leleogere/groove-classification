@@ -38,8 +38,8 @@ if __name__ == '__main__':
     HYPERPARAMETERS = [
         HyperParameter('TrackProcessorType', ['multivariate', 'pianoroll']),
         HyperParameter('TrackProcessorPianorollResolution', [30]),
-        HyperParameter('LstmHiddenSize', [8, 16, 32, 64]),
-        HyperParameter('LstmNumLayers', [1, 2]),
+        HyperParameter('LstmHiddenSize', [8, 16, 32, 64, 96, 128]),
+        HyperParameter('LstmNumLayers', [1, 2, 3]),
         HyperParameter('DropoutRate', [0.1, 0.3, 0.5]),
         # HyperParameter('DropoutRate', [0.5]),
         # HyperParameter('lr', np.logspace(-4, -2, 3).tolist()),
