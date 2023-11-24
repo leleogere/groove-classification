@@ -4,6 +4,9 @@ from dataclasses import dataclass
 import random
 from datetime import datetime
 from pathlib import Path
+from pprint import pformat
+
+import yaml
 
 from cli.parser import ScriptParameters
 from data_processing.track_processors import TrackProcessors
@@ -80,8 +83,8 @@ if __name__ == '__main__':
             results_path=args.results_path,
             track_processor_type=TrackProcessors.from_str(hparams['TrackProcessorType']),
             track_processor_pianoroll_resolution=hparams['TrackProcessorPianorollResolution'],
-            training_batch_size=256,
-            training_num_epochs=200,
+            training_batch_size=64,
+            training_num_epochs=2,
             training_patience=40,
             hp_use_tempo=hparams['UseTempo'],
             hp_num_measures=hparams['NumMeasures'],
@@ -98,6 +101,26 @@ if __name__ == '__main__':
         )
         print("=" * 80)
         print(f'Running {i + 1}/{len(domain)}:\n{pformat(params.__dict__)}')
+
+        # Checking if same hyperparameters already tested
+        existing = False
+        if params.results_path.exists():
+            hparam_files = list(params.results_path.rglob('**/hparams.yaml'))
+            for hparam_file in hparam_files:
+                if hparam_file.exists():
+                    with open(hparam_file, 'r') as f:
+                        try:
+                            hparams = yaml.safe_load(f)
+                        except yaml.YAMLError as exc:
+                            print(f"Error in loading {hparam_file}: exc")
+                            continue
+                    if hparams == params.to_serializable_dict():
+                        existing = True
+                        break
+        if existing:
+            print(f"Skipping run as same hyperparameters already tested in '{hparam_file.parent}'.")
+            continue
+
         main(params)
         if Path("/tmp/groove-stop").exists():
             print("Stopping early")
