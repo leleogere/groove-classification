@@ -37,6 +37,12 @@ class ScriptParameters:
     def __str__(self):
         return pformat(self.__dict__)
 
+    def to_serializable_dict(self) -> dict:
+        return {
+            k: v if isinstance(v, (int, float, str, bool)) else str(v)
+            for k, v in self.__dict__.items()
+        }
+
 
 def bool_from_str(s: str) -> bool:
     if s.lower() in ['true', '1']:

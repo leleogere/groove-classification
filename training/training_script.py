@@ -75,7 +75,7 @@ def main(params: ScriptParameters):
         dropout_rate=params.hp_dropout_rate,
         use_tempo=params.hp_use_tempo,
         loss_function=loss,
-        hparams_to_log=params.__dict__,
+        hparams_to_log=params.to_serializable_dict(),
     )
 
     # Prepare callbacks
