@@ -1,4 +1,5 @@
 import argparse
+import copy
 import gc
 import itertools
 from dataclasses import dataclass
@@ -109,7 +110,11 @@ if __name__ == '__main__':
 
         # Checking if same hyperparameters already tested
         existing = False
+        ignored_params = ['training_batch_size', 'training_num_epochs', 'training_patience']
         if params.results_path.exists():
+            new_hparams = copy.deepcopy(params.to_serializable_dict())
+            for ignored_param in ignored_params:
+                new_hparams.pop(ignored_param)
             hparam_files = list(params.results_path.rglob('**/hparams.yaml'))
             for hparam_file in hparam_files:
                 if hparam_file.exists():
@@ -119,7 +124,9 @@ if __name__ == '__main__':
                         except yaml.YAMLError as exc:
                             print(f"Error in loading {hparam_file}: exc")
                             continue
-                    if hparams == params.to_serializable_dict():
+                    for ignored_param in ignored_params:
+                        hparams.pop(ignored_param)
+                    if hparams == new_hparams:
                         existing = True
                         break
         if existing:
