@@ -85,8 +85,8 @@ class GenreClassifier(L.LightningModule):
         loss = self.criterion(y_hat, y)
         self.log(f'{key}/loss', loss, on_step=False, on_epoch=True, prog_bar=True)
         # Accumulate prediction for global metrics
-        self.accumulated_predictions[key]['y_true'].append(y.detach().cpu().numpy())
-        self.accumulated_predictions[key]['y_pred'].append(torch.argmax(y_hat, dim=-1).detach().cpu().numpy())
+        self.accumulated_predictions[key]['y_true'].append(y.detach())
+        self.accumulated_predictions[key]['y_pred'].append(torch.argmax(y_hat, dim=-1).detach())
         return loss
 
     def training_step(self, batch, batch_idx):
@@ -96,8 +96,8 @@ class GenreClassifier(L.LightningModule):
         return self.common_step(batch, self._val_key)
 
     def on_common_epoch_end(self, key: str):
-        y_true = np.concatenate(self.accumulated_predictions[key]['y_true'], axis=0)
-        y_pred = np.concatenate(self.accumulated_predictions[key]['y_pred'], axis=0)
+        y_true = torch.cat(self.accumulated_predictions[key]['y_true'], dim=0)
+        y_pred = torch.cat(self.accumulated_predictions[key]['y_pred'], dim=0)
         # Compute metrics
         metrics_dict = {k: v(y_pred, y_true) for k, v in self.metrics.items()}
         self.log_dict({f'{key}/{k}': v for k, v in metrics_dict.items()}, on_step=False, on_epoch=True, prog_bar=True)
