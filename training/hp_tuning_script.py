@@ -5,10 +5,10 @@ from dataclasses import dataclass
 import random
 from datetime import datetime
 from pathlib import Path
-from pprint import pformat
 
 import torch
 import yaml
+import tabulate
 
 from cli.parser import ScriptParameters
 from data_processing.track_processors import TrackProcessors
@@ -102,7 +102,8 @@ if __name__ == '__main__':
             min_tracks_per_label=20,
         )
         print("=" * 80)
-        print(f'Running {i + 1}/{len(domain)}:\n{pformat(params.__dict__)}')
+        print(f'Run {i + 1}/{len(domain)}')
+        tabulate.tabulate([list(hparams.items())], headers=['Hyperparameter', 'Value'], tablefmt='rounded_outline')
 
         # Checking if same hyperparameters already tested
         existing = False
