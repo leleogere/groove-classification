@@ -1,4 +1,5 @@
 import argparse
+import gc
 import itertools
 from dataclasses import dataclass
 import random
@@ -6,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from pprint import pformat
 
+import torch
 import yaml
 
 from cli.parser import ScriptParameters
@@ -122,6 +124,10 @@ if __name__ == '__main__':
             continue
 
         main(params)
+        # Try to release GPU memory
+        torch.cuda.empty_cache()
+        gc.collect()
+        # Check if we should stop the search
         if Path("/tmp/groove-stop").exists():
             print("Stopping early")
             Path("/tmp/groove-stop").unlink()
