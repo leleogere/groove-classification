@@ -101,7 +101,7 @@ class GenreClassifier(L.LightningModule):
         # Compute metrics
         metrics_dict = {k: v(y_pred, y_true) for k, v in self.metrics.items()}
         self.log_dict({f'{key}/{k}': v for k, v in metrics_dict.items()}, on_step=False, on_epoch=True, prog_bar=True)
-        image = confusion_matrix_pipeline(y_true, y_pred, self.class_names, normalization='true').transpose((2, 0, 1))
+        image = confusion_matrix_pipeline(y_true.cpu(), y_pred.cpu(), self.class_names, normalization='true').transpose((2, 0, 1))
         self.logger.experiment.add_image(f'{key}_confusion_matrix', image, self.current_epoch)
         # Reset accumulated predictions
         self._reset_accumulated_predictions(key)
