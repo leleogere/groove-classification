@@ -103,7 +103,9 @@ if __name__ == '__main__':
         )
         print("=" * 80)
         print(f'Run {i + 1}/{len(domain)}')
-        tabulate.tabulate([list(hparams.items())], headers=['Hyperparameter', 'Value'], tablefmt='rounded_outline')
+        print(
+            tabulate.tabulate([list(hparams.items())], headers=['Hyperparameter', 'Value'], tablefmt='rounded_outline')
+        )
 
         # Checking if same hyperparameters already tested
         existing = False
