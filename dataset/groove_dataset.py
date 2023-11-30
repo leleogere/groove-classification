@@ -198,7 +198,7 @@ class GrooveMidiModule(L.LightningDataModule):
         self.drums = DRUMS
         if self.track_processor is not None:
             self.memory = Memory(location=self.cache_location, verbose=0)
-            self.track_processor.track_to_tensor = self.memory.cache(self.track_processor.track_to_tensor)
+            self.track_processor.notes_to_tensor = self.memory.cache(self.track_processor.notes_to_tensor)
 
     def prepare_data(self) -> None:
         success_file = self.path / self._success_file_name

@@ -19,12 +19,12 @@ class TrackProcessor:
     def short_name(self) -> str:
         raise NotImplementedError
 
-    def track_to_tensor(self, track: Track) -> torch.Tensor:
+    def notes_to_tensor(self, track: Track) -> torch.Tensor:
         raise NotImplementedError
 
     def process_track(self, track: Track) -> ProcessedTrack:
         return ProcessedTrack(
-            data=self.track_to_tensor(track),
+            data=self.notes_to_tensor(track),
             **track.__dict__,
         )
 
@@ -76,7 +76,7 @@ class RelativeMultivariateTrackProcessor(TrackProcessorWithTempo):
     def short_name(self) -> str:
         return f'multivariate'
 
-    def track_to_tensor(self, track: Track):
+    def notes_to_tensor(self, track: Track):
         note_attributes = defaultdict(list)
         for note in track.relative_notes():
             for key in RelativeNote.__slots__:
@@ -116,7 +116,7 @@ class PianoRollTrackProcessor(RelativeMultivariateTrackProcessor):
     def short_name(self) -> str:
         return f'pianoroll'
 
-    def track_to_tensor(self, track: Track):
+    def notes_to_tensor(self, track: Track):
         notes = track.notes()
         start = notes[0].start
         end = notes[-1].end
