@@ -9,15 +9,14 @@ from utils.constants import DRUMS
 
 
 class TrackProcessor:
+    short_name = 'abstract_track_processor'
+
     def __init__(self):
         pass
 
     @property
     def name(self) -> str:
         return self.__class__.__name__
-
-    def short_name(self) -> str:
-        raise NotImplementedError
 
     def notes_to_tensor(self, track: Track) -> torch.Tensor:
         raise NotImplementedError
@@ -66,15 +65,13 @@ class TrackProcessorWithTempo(TrackProcessor):
 
 
 class RelativeMultivariateTrackProcessor(TrackProcessorWithTempo):
+    short_name = 'multivariate'
     velocity_norm = 127  # max velocity
     time_norm = 100  # so duration and timeshift are closer to 0-5
     drums = DRUMS
 
     def __init__(self, use_tempo: bool = True):
         super().__init__(use_tempo=use_tempo)
-
-    def short_name(self) -> str:
-        return f'multivariate'
 
     def notes_to_tensor(self, track: Track):
         note_attributes = defaultdict(list)
@@ -107,14 +104,12 @@ class RelativeMultivariateTrackProcessor(TrackProcessorWithTempo):
 
 
 class PianoRollTrackProcessor(RelativeMultivariateTrackProcessor):
+    short_name = 'pianoroll'
     drums = DRUMS
 
     def __init__(self, resolution: int = 20, use_tempo: bool = True):
         super().__init__(use_tempo=use_tempo)
         self.resolution = resolution
-
-    def short_name(self) -> str:
-        return f'pianoroll'
 
     def notes_to_tensor(self, track: Track):
         notes = track.notes()
