@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Self
+from typing import Self, Any
 
 import torch
 
@@ -91,24 +91,24 @@ class Track:
         self.split = split
         self.label_idx = label_idx
 
-    def notes(self):
+    def notes(self) -> list[Note]:
         midi = load_and_validate_midi_file(self.midi_path, only_drums=True, unique_track=True, unique_tempo=True, unique_time_signature=True)
         notes = [Note(n.start, n.end, n.pitch, n.velocity) for n in sorted(midi.instruments[0].notes, key=lambda x: x.start)]
         return notes
 
-    def relative_notes(self):
+    def relative_notes(self) -> list[RelativeNote]:
         relative_notes = [
             RelativeNote.from_note(n, timeshift=n_next.start - n.start)
             for n, n_next in zip(self.notes(), self.notes()[1:] + [self.notes()[-1]])
         ]
         return relative_notes
 
-    def to_json(self):
+    def to_json(self) -> dict[str, Any]:
         d = self.__dict__.copy()
         d['midi_path'] = str(d['midi_path'])
         return d
 
-    def to_json_file(self, path: Path, create_parents: bool = False, **kwargs):
+    def to_json_file(self, path: Path, create_parents: bool = False, **kwargs) -> None:
         if not path.name.endswith('.json'):
             raise ValueError(f"Path {path} must end with .json")
         if create_parents:
@@ -117,24 +117,24 @@ class Track:
             json.dump(self.to_json(), f, **kwargs)
 
     @classmethod
-    def from_json(cls, json_dict: dict):
+    def from_json(cls, json_dict: dict) -> Self:
         json_dict['midi_path'] = Path(json_dict['midi_path'])
         return cls(**json_dict)
 
-    def copy(self):
+    def copy(self) -> Self:
         return Track.from_json(self.to_json())
 
     @classmethod
-    def from_json_file(cls, path: Path):
+    def from_json_file(cls, path: Path) -> Self:
         with open(path) as f:
             return cls.from_json(json.load(f))
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         elements = [f"{k}={v}" for k, v in self.__dict__.items()]
         return f"Track({', '.join(elements)})"
 
     @classmethod
-    def from_partial(cls, track: Self, **kwargs):
+    def from_partial(cls, track: Self, **kwargs) -> Self:
         d = track.__dict__.copy()
         d.update(kwargs)
         return cls(**d)
