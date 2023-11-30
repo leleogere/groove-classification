@@ -52,8 +52,11 @@ class TrackProcessorWithTempo(TrackProcessor):
         super().__init__()
         self.use_tempo = use_tempo
 
+    def tempo_to_tensor(self, track: Track) -> torch.Tensor:
+        return torch.tensor(track.bpm, dtype=torch.float32)
+
     def collate_tempos_fn(self, batch: list[ProcessedTrack | Track]) -> torch.Tensor:
-        return torch.stack([torch.tensor(sample.bpm) for sample in batch])
+        return torch.stack([self.tempo_to_tensor(sample) for sample in batch])
 
     def collate_fn(self, batch: list[ProcessedTrack]) -> dict[str, torch.Tensor]:
         results = super().collate_fn(batch)
