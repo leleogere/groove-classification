@@ -102,7 +102,7 @@ def split_midi_dataset(
     chunk_paths = splitter.split_midi_dataset(
         dataset.tracks,
         split_path,
-        only_if_doesnt_exist=not force_split_recomputation,
+        overwrite_existing=force_split_recomputation,
         subpbar=False
     )
     new_tracks = [

@@ -161,15 +161,17 @@ class Splitter:
             self,
             dataset: Path | list[Track],
             out_path: Path,
-            only_if_doesnt_exist: bool = False,
+            overwrite_existing: bool = True,
             subpbar: bool = False,
     ) -> dict[Path, list[Path]]:
         """
         Split a MIDI dataset into bars.
         :param dataset: Path to the MIDI dataset or list of tracks.
         :param out_path: Output directory. The structure of the dataset will be preserved.
-        :param only_if_doesnt_exist: Whether to skip files that already have an associated output directory (it doesn't
-            mean that the chunks have already been computed, an error could have occurred during the previous process).
+        :param overwrite_existing: Whether to recompute chunks of files that already have chunks, i.e. files that have
+            at least ONE chunk existing, it will not check if all chunks have been computed. It means that interrupting
+            the splitting process and resuming it later may result in incomplete splitting for the file being processed
+            at the moment of the interruption if overwrite_existing is False.
         :param subpbar: Whether to display the note progression for each MIDI file.
         :return: Dictionary mapping each MIDI file to a list of paths to the chunks.
         """
@@ -197,7 +199,7 @@ class Splitter:
         )
         for midi_path, midi_size in zip(midi_paths, midi_sizes):
             current_out_path = out_path / midi_path.relative_to(root_path).with_suffix('')
-            if only_if_doesnt_exist and current_out_path.exists():
+            if  current_out_path.exists() and not overwrite_existing:
                 chunk_file_paths[midi_path].extend(list(current_out_path.rglob('*.mid')))
                 pbar.update(midi_size)
                 continue
