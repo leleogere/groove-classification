@@ -120,13 +120,14 @@ class MidiAugmentor:
         error_shifts[np.random.rand(num_notes) > proba_error] = 0
 
         # Apply noise
-        vel_max = 127
+        VELOCITY_MAX = 127
         for i, note in enumerate(new_midi.instruments[0].notes):
             shift_s = (time_shifts[i] + error_shifts[i]) / 1000
             note.start += shift_s
             note.end += shift_s
             note.velocity = int(
-                np.clip(velocity_shaper(note.velocity / vel_max) * vel_max + velocity_shifts[i], 0, vel_max))
+                np.clip(velocity_shaper(note.velocity / VELOCITY_MAX) * VELOCITY_MAX + velocity_shifts[i], 0, VELOCITY_MAX)
+            )
 
         # Write midi
         new_midi.write(str(out_path))
