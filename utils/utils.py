@@ -98,25 +98,3 @@ def load_json(path: Path):
 
 def find_common_root(paths: list[Path]) -> Path:
     return Path(os.path.commonpath(paths))
-
-
-def write_labels_info(infos: dict[str, dict[str, dict[str, object]]], path: Path, tablefmt: str = 'rounded_outline'):
-    def unique_list(it: Iterable):
-        return list(dict.fromkeys(it))
-    infos = copy.deepcopy(infos)
-    labels = unique_list(label for label in infos)
-    splits = unique_list(split for label in infos for split in infos[label])
-    fields = unique_list(field for label in infos for split in infos[label] for field in infos[label][split])
-    # add split "Total" to dict infos
-    for label in infos:
-        for field in infos[label][splits[0]]:
-            infos[label]['total'][field] = sum(infos[label][split][field] for split in splits)
-    splits.insert(0, 'total')
-    with open(path, 'w') as f:
-        for split in splits:
-            f.write(f'{split}\n')
-            table = []
-            for label in labels:
-                table.append([label] + [infos[label][split][field] for field in fields])
-            f.write(tabulate.tabulate(table, headers=['label'] + list(fields), tablefmt=tablefmt))
-            f.write('\n\n')

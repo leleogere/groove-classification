@@ -17,7 +17,7 @@ from data_augmentation.midi_augmentor import MidiAugmentor
 from data_augmentation.midi_splitter import Splitter
 from data_processing.track_processors import TrackProcessor, RelativeMultivariateTrackProcessor
 from utils.constants import DRUMS
-from utils.utils import process_label, write_labels_info, load_json
+from utils.utils import process_label, load_json
 from utils.classes import Track
 
 
@@ -242,7 +242,8 @@ class GrooveMidiModule(L.LightningDataModule):
             )
             for track in datasets[split].tracks:
                 self.label_infos[track.label][split]["tracks"] += 1
-        write_labels_info(self.label_infos, dataset_path / self._labels_file_name)
+        # Write a first version of the label infos in the dataset folder
+        self.export_label_infos(dataset_path / self._labels_file_name)
 
         # Filter labels with less than min_tracks_per_label tracks in the train set
         self.unique_labels = sorted([
