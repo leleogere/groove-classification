@@ -112,19 +112,19 @@ class MidiAugmentor:
         num_notes = len(new_midi.instruments[0].notes)
         if seed is not None:
             np.random.seed(seed)
-        mspb = 60000 / bpm
-        time_shifts = np.random.normal(0, std_time_shift * mspb, num_notes)
+        spb = 60 / bpm  # X beat/minute = 1/X minute/beat = 60/X second/beat
+        time_shifts = np.random.normal(0, std_time_shift * spb, num_notes)
         velocity_shaper = lambda x: x ** (self._global_velocity_shape_force ** -global_velocity_shape)
         velocity_shifts = np.random.normal(0, std_velocity_shift, num_notes)
-        error_shifts = np.random.normal(mean_error_time_shift * mspb, std_error_time_shift * mspb, num_notes)
+        error_shifts = np.random.normal(mean_error_time_shift * spb, std_error_time_shift * spb, num_notes)
         error_shifts[np.random.rand(num_notes) > proba_error] = 0
 
         # Apply noise
         VELOCITY_MAX = 127
         for i, note in enumerate(new_midi.instruments[0].notes):
-            shift_s = (time_shifts[i] + error_shifts[i]) / 1000
-            note.start += shift_s
-            note.end += shift_s
+            shift = (time_shifts[i] + error_shifts[i])
+            note.start += shift
+            note.end += shift
             note.velocity = int(
                 np.clip(velocity_shaper(note.velocity / VELOCITY_MAX) * VELOCITY_MAX + velocity_shifts[i], 0, VELOCITY_MAX)
             )
