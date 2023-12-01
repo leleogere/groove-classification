@@ -1,5 +1,6 @@
 import copy
 import csv
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Callable, Iterable
@@ -175,7 +176,7 @@ class GrooveMidiModule(L.LightningDataModule):
             batch_size: int = 128,
             track_processor: TrackProcessor | None = None,
             min_tracks_per_label: int = 20,
-            cache_location: Path = Path("/tmp"),
+            cache_location: Path = Path(tempfile.gettempdir()),
             split_dataset_into_measures: bool = False,
             split_dataset_into_measures_kwargs: dict = None,
             augment_dataset: bool = False,
