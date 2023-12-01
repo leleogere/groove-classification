@@ -114,7 +114,7 @@ class PianoRollTrackProcessor(RelativeMultivariateTrackProcessor):
     def notes_to_tensor(self, track: Track):
         notes = track.notes()
         start = notes[0].start
-        end = max(note.end for note in notes)  # as the last starting note might not be the last ending one
+        end = max(note.end for note in notes)  # last starting note might not be the last ending one
         length = end - start
         num_steps = int(length * self.resolution)
         piano_roll = torch.zeros(len(self.drums), num_steps)
