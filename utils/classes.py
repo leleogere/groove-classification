@@ -1,7 +1,8 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Self, Any
+from typing import Any
+from typing import Self
 
 import torch
 
@@ -67,23 +68,23 @@ class RelativeNote(AsDictMixin):
     timeshift: float
 
     @staticmethod
-    def from_note(note: Note, timeshift: float = 0.):
+    def from_note(note: Note, timeshift: float = 0.0):
         return RelativeNote(
             pitch=note.pitch,
             velocity=note.velocity,
             duration=note.duration,
-            timeshift=timeshift
+            timeshift=timeshift,
         )
 
 
 class Track:
     def __init__(
-            self,
-            midi_path: Path,
-            label: str = None,
-            bpm: float = None,
-            split: str = None,
-            label_idx: int = None,
+        self,
+        midi_path: Path,
+        label: str = None,
+        bpm: float = None,
+        split: str = None,
+        label_idx: int = None,
     ):
         self.midi_path = midi_path
         self.label = label
@@ -92,8 +93,17 @@ class Track:
         self.label_idx = label_idx
 
     def notes(self) -> list[Note]:
-        midi = load_and_validate_midi_file(self.midi_path, only_drums=True, unique_track=True, unique_tempo=True, unique_time_signature=True)
-        notes = [Note(n.start, n.end, n.pitch, n.velocity) for n in sorted(midi.instruments[0].notes, key=lambda x: x.start)]
+        midi = load_and_validate_midi_file(
+            self.midi_path,
+            only_drums=True,
+            unique_track=True,
+            unique_tempo=True,
+            unique_time_signature=True,
+        )
+        notes = [
+            Note(n.start, n.end, n.pitch, n.velocity)
+            for n in sorted(midi.instruments[0].notes, key=lambda x: x.start)
+        ]
         return notes
 
     def relative_notes(self) -> list[RelativeNote]:
@@ -105,20 +115,20 @@ class Track:
 
     def to_json(self) -> dict[str, Any]:
         d = self.__dict__.copy()
-        d['midi_path'] = str(d['midi_path'])
+        d["midi_path"] = str(d["midi_path"])
         return d
 
     def to_json_file(self, path: Path, create_parents: bool = False, **kwargs) -> None:
-        if not path.name.endswith('.json'):
+        if not path.name.endswith(".json"):
             raise ValueError(f"Path {path} must end with .json")
         if create_parents:
             path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             json.dump(self.to_json(), f, **kwargs)
 
     @classmethod
     def from_json(cls, json_dict: dict) -> Self:
-        json_dict['midi_path'] = Path(json_dict['midi_path'])
+        json_dict["midi_path"] = Path(json_dict["midi_path"])
         return cls(**json_dict)
 
     def copy(self) -> Self:
@@ -142,9 +152,9 @@ class Track:
 
 class ProcessedTrack(Track):
     def __init__(
-            self,
-            data: torch.Tensor,
-            **kwargs,
+        self,
+        data: torch.Tensor,
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.data = data

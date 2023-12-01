@@ -2,14 +2,17 @@ from collections import defaultdict
 from enum import Enum
 
 import torch
-from torch import nn, LongTensor
+from torch import LongTensor
+from torch import nn
 
-from utils.classes import Track, RelativeNote, ProcessedTrack
+from utils.classes import ProcessedTrack
+from utils.classes import RelativeNote
+from utils.classes import Track
 from utils.constants import DRUMS
 
 
 class TrackProcessor:
-    short_name = 'abstract_track_processor'
+    short_name = "abstract_track_processor"
 
     def __init__(self):
         pass
@@ -35,8 +38,8 @@ class TrackProcessor:
 
     def collate_fn(self, batch: list[ProcessedTrack]) -> dict[str, torch.Tensor]:
         return {
-            'samples': self.collate_samples_fn(batch),
-            'labels': self.collate_labels_fn(batch),
+            "samples": self.collate_samples_fn(batch),
+            "labels": self.collate_labels_fn(batch),
         }
 
     def output_dim(self):
@@ -60,12 +63,12 @@ class TrackProcessorWithTempo(TrackProcessor):
     def collate_fn(self, batch: list[ProcessedTrack]) -> dict[str, torch.Tensor]:
         results = super().collate_fn(batch)
         if self.use_tempo:
-            results['tempos'] = self.collate_tempos_fn(batch)
+            results["tempos"] = self.collate_tempos_fn(batch)
         return results
 
 
 class RelativeMultivariateTrackProcessor(TrackProcessorWithTempo):
-    short_name = 'multivariate'
+    short_name = "multivariate"
     velocity_norm = 127  # max velocity
     time_norm = 100  # so duration and timeshift are closer to 0-5
     drums = DRUMS
@@ -78,24 +81,33 @@ class RelativeMultivariateTrackProcessor(TrackProcessorWithTempo):
         for note in track.relative_notes():
             for key in RelativeNote.__slots__:
                 note_attributes[key].append(getattr(note, key))
-            note_attributes['id'].append(self.drums.pitch_to_id[note.pitch])
+            note_attributes["id"].append(self.drums.pitch_to_id[note.pitch])
 
-        vector = torch.cat(
-            [
-                torch.nn.functional.one_hot(torch.tensor(note_attributes['id']), num_classes=len(self.drums)).float(),
-                torch.tensor(note_attributes["velocity"], dtype=torch.float).unsqueeze(-1) / self.velocity_norm,
-                torch.tensor(note_attributes["duration"], dtype=torch.float).unsqueeze(-1) / self.time_norm,
-                torch.tensor(note_attributes["timeshift"], dtype=torch.float).unsqueeze(-1) / self.time_norm,
+        vector_components = [
+            # 22 first components are the one-hot encoding of the drum id
+            torch.nn.functional.one_hot(
+                torch.tensor(note_attributes["id"]), num_classes=len(self.drums)
+            ).float(),
+            # the 3 others are the normalized velocity, duration and timeshift
+            *[
+                torch.tensor(note_attributes[key], dtype=torch.float).unsqueeze(-1) / norm
+                for key, norm in zip(
+                    ["velocity", "duration", "timeshift"],
+                    [self.velocity_norm, self.time_norm, self.time_norm],
+                )
             ],
-            dim=-1
-        )
+        ]
+        vector = torch.cat(vector_components, dim=-1)
         return vector
 
     def collate_samples_fn(self, batch: list[ProcessedTrack]) -> torch.Tensor:
         x = [sample.data for sample in batch]
         padding_value = 0
         max_len = max(sample.shape[-2] for sample in x)
-        padded = [nn.functional.pad(seq, (0, 0, max_len - seq.shape[-2], 0), value=padding_value) for seq in x]
+        padded = [
+            nn.functional.pad(seq, (0, 0, max_len - seq.shape[-2], 0), value=padding_value)
+            for seq in x
+        ]
         stacked = torch.stack(padded)
         return stacked
 
@@ -104,7 +116,7 @@ class RelativeMultivariateTrackProcessor(TrackProcessorWithTempo):
 
 
 class PianoRollTrackProcessor(RelativeMultivariateTrackProcessor):
-    short_name = 'pianoroll'
+    short_name = "pianoroll"
     drums = DRUMS
 
     def __init__(self, resolution: int = 20, use_tempo: bool = True):
@@ -121,7 +133,9 @@ class PianoRollTrackProcessor(RelativeMultivariateTrackProcessor):
         for note in notes:
             i_start = int((note.start - start) * self.resolution)
             i_end = int((note.end - start) * self.resolution)
-            piano_roll[self.drums.pitch_to_id[note.pitch], i_start:i_end] = note.velocity / self.velocity_norm
+            piano_roll[self.drums.pitch_to_id[note.pitch], i_start:i_end] = (
+                note.velocity / self.velocity_norm
+            )
         return piano_roll.transpose(0, 1)  # change to (timestep, features)
 
     def output_dim(self):

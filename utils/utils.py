@@ -1,14 +1,10 @@
-import copy
 import json
 import os.path
-from pathlib import Path
-from typing import Iterable
 import re
-
-import pretty_midi as pm
-import tabulate
+from pathlib import Path
 
 import numpy as np
+import pretty_midi as pm
 
 np.int = int
 
@@ -24,7 +20,7 @@ def process_label(raw_label: str, keep_sublabel_for: list[str] | None = None) ->
     """
     if keep_sublabel_for is None:
         keep_sublabel_for = []
-    main_label = raw_label.split('/')[0]
+    main_label = raw_label.split("/")[0]
     if main_label not in keep_sublabel_for:
         return main_label
     else:
@@ -37,18 +33,18 @@ def parse_bpm_from_file_name(file_name: str) -> float:
     :param file_name: File name.
     :return: BPM.
     """
-    return float(re.search(r'\d+_[a-z0-9\-]+_(\d+|\d+\.\d+)_.*\.mid', file_name).group(1))
+    return float(re.search(r"\d+_[a-z0-9\-]+_(\d+|\d+\.\d+)_.*\.mid", file_name).group(1))
 
 
 def load_and_validate_midi_file(
-        midi_path: Path,
-        only_drums: bool = False,
-        unique_track: bool = False,
-        unique_time_signature: bool = False,
-        unique_tempo: bool = False,
+    midi_path: Path,
+    only_drums: bool = False,
+    unique_track: bool = False,
+    unique_time_signature: bool = False,
+    unique_tempo: bool = False,
 ) -> pm.PrettyMIDI:
     if not midi_path.exists():
-        raise FileNotFoundError(f'File {midi_path} does not exist.')
+        raise FileNotFoundError(f"File {midi_path} does not exist.")
     midi = pm.PrettyMIDI(str(midi_path))
     # Check that there is only one unique drum track
     if unique_track and len(midi.instruments) != 1:
@@ -62,18 +58,22 @@ def load_and_validate_midi_file(
     # Read time signature (only allow one unique time signature in the whole track)
     time_signatures = midi.time_signature_changes
     if (
-            unique_time_signature
-            and len(time_signatures) != 1
-            and any(time_signatures[0].__dict__ != ts.__dict__ for ts in time_signatures)  # in case of duplicates
+        unique_time_signature
+        and len(time_signatures) != 1
+        and any(
+            time_signatures[0].__dict__ != ts.__dict__ for ts in time_signatures
+        )  # in case of duplicates
     ):
-        raise ValueError(f"Expected a unique time signature, got {len(time_signatures)} in {midi_path}.")
+        raise ValueError(
+            f"Expected a unique time signature, got {len(time_signatures)} in {midi_path}."
+        )
     return midi
 
 
 def get_midi_paths(path: Path, return_sizes: bool = False):
-    midi_exts = ['.mid', '.midi']
+    midi_exts = [".mid", ".midi"]
     midi_exts.extend([ext.upper() for ext in midi_exts])
-    paths = sum([list(path.rglob(f'*{ext}')) for ext in midi_exts], [])
+    paths = sum([list(path.rglob(f"*{ext}")) for ext in midi_exts], [])
     if return_sizes:
         sizes = [p.stat().st_size for p in paths]
         return paths, sizes
@@ -82,17 +82,17 @@ def get_midi_paths(path: Path, return_sizes: bool = False):
 
 
 def dump_json(d: dict, path: Path, create_parents: bool = False, overwrite: bool = True, **kwargs):
-    if not path.name.endswith('.json'):
+    if not path.name.endswith(".json"):
         raise ValueError(f"Path {path} must end with .json")
     path.parent.mkdir(parents=create_parents, exist_ok=True)
     if not overwrite and path.exists():
         raise FileExistsError(f"File {path} already exists.")
-    with open(path, 'w') as f:
+    with open(path, "w") as f:
         json.dump(d, f, **kwargs)
 
 
 def load_json(path: Path):
-    with open(path, 'r') as f:
+    with open(path, "r") as f:
         return json.load(f)
 
 

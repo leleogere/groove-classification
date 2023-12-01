@@ -2,14 +2,14 @@ import argparse
 import copy
 import gc
 import itertools
-from dataclasses import dataclass
 import random
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import tabulate
 import torch
 import yaml
-import tabulate
 
 from cli.parser import ScriptParameters
 from data_processing.track_processors import TrackProcessors
@@ -23,38 +23,44 @@ class HyperParameter:
 
     def __post_init__(self):
         if not all(isinstance(v, self.type) or v is None for v in self.values):
-            raise ValueError(f'All values must be of the same type: {type(self.values[0])}')
+            raise ValueError(f"All values must be of the same type: {type(self.values[0])}")
 
     @property
     def type(self):
         return type(self.values[0])
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False)
-    parser.add_argument('--data-path', type=Path, required=True, help='Path to the dataset.')
-    parser.add_argument('--processed-data-path', type=Path, required=True, help='Path to store the processed data.')
-    parser.add_argument('--results-path', type=Path, required=True, help='Path to the results.')
-    parser.add_argument('--start-at', type=int, default=0, help='Index of the first hyperparameter set to run.')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter, allow_abbrev=False
+    )
+    parser.add_argument("--data-path", type=Path, required=True, help="Path to the dataset.")
+    parser.add_argument(
+        "--processed-data-path", type=Path, required=True, help="Path to store the processed data."
+    )
+    parser.add_argument("--results-path", type=Path, required=True, help="Path to the results.")
+    parser.add_argument(
+        "--start-at", type=int, default=0, help="Index of the first hyperparameter set to run."
+    )
     args = parser.parse_args()
 
     HYPERPARAMETERS = [
-        HyperParameter('TrackProcessorType', ['multivariate', 'pianoroll']),
-        HyperParameter('TrackProcessorPianorollResolution', [30]),
-        HyperParameter('LstmHiddenSize', [8, 16, 32, 64, 96, 128]),
-        HyperParameter('LstmNumLayers', [1, 2, 3]),
-        HyperParameter('DropoutRate', [0.1, 0.3, 0.5]),
+        HyperParameter("TrackProcessorType", ["multivariate", "pianoroll"]),
+        HyperParameter("TrackProcessorPianorollResolution", [30]),
+        HyperParameter("LstmHiddenSize", [8, 16, 32, 64, 96, 128]),
+        HyperParameter("LstmNumLayers", [1, 2, 3]),
+        HyperParameter("DropoutRate", [0.1, 0.3, 0.5]),
         # HyperParameter('DropoutRate', [0.5]),
         # HyperParameter('lr', np.logspace(-4, -2, 3).tolist()),
-        HyperParameter('lr', [1e-3]),
+        HyperParameter("lr", [1e-3]),
         # HyperParameter('reg', np.logspace(-4, -2, 3).tolist()),
-        HyperParameter('reg', [1e-4, 5e-4]),
-        HyperParameter('NumMeasures', [1, 2, 4, 8]),
-        HyperParameter('MeasuresOverlap', [True, False]),
-        HyperParameter('IMFW', [True, False]),
-        HyperParameter('UseTempo', [True, False]),
-        HyperParameter('UseAugmentedDataset', [True, False]),
-        HyperParameter('NumAugmentations', [0, 2, 5, 10]),
+        HyperParameter("reg", [1e-4, 5e-4]),
+        HyperParameter("NumMeasures", [1, 2, 4, 8]),
+        HyperParameter("MeasuresOverlap", [True, False]),
+        HyperParameter("IMFW", [True, False]),
+        HyperParameter("UseTempo", [True, False]),
+        HyperParameter("UseAugmentedDataset", [True, False]),
+        HyperParameter("NumAugmentations", [0, 2, 5, 10]),
     ]
 
     domain = list(
@@ -63,11 +69,14 @@ if __name__ == '__main__':
     )  # See https://stackoverflow.com/questions/5228158/cartesian-product-of-a-dictionary-of-lists/40623158
 
     def is_valid(hps: dict) -> bool:
-        if hps['UseAugmentedDataset'] and hps['NumAugmentations'] == 0:
+        if hps["UseAugmentedDataset"] and hps["NumAugmentations"] == 0:
             return False
-        if not hps['UseAugmentedDataset'] and hps['NumAugmentations'] != 0:
+        if not hps["UseAugmentedDataset"] and hps["NumAugmentations"] != 0:
             return False
-        if not hps['TrackProcessorType'] == 'pianoroll' and hps['TrackProcessorPianorollResolution'] != 30:
+        if (
+            not hps["TrackProcessorType"] == "pianoroll"
+            and hps["TrackProcessorPianorollResolution"] != 30
+        ):
             return False
         return True
 
@@ -84,41 +93,45 @@ if __name__ == '__main__':
             data_path=args.data_path,
             processed_data_path=args.processed_data_path,
             results_path=args.results_path,
-            track_processor_type=TrackProcessors.from_str(hparams['TrackProcessorType']),
-            track_processor_pianoroll_resolution=hparams['TrackProcessorPianorollResolution'],
+            track_processor_type=TrackProcessors.from_str(hparams["TrackProcessorType"]),
+            track_processor_pianoroll_resolution=hparams["TrackProcessorPianorollResolution"],
             training_batch_size=64,
             training_num_epochs=2,
             training_patience=40,
-            hp_use_tempo=hparams['UseTempo'],
-            hp_num_measures=hparams['NumMeasures'],
-            hp_measures_overlap=hparams['MeasuresOverlap'],
-            hp_imfw=hparams['IMFW'],
-            hp_use_augmented_dataset=hparams['UseAugmentedDataset'],
-            hp_num_augmentations=hparams['NumAugmentations'],
-            hp_lstm_hidden_size=hparams['LstmHiddenSize'],
-            hp_lstm_num_layers=hparams['LstmNumLayers'],
-            hp_dropout_rate=hparams['DropoutRate'],
-            hp_lr=hparams['lr'],
-            hp_reg=hparams['reg'],
+            hp_use_tempo=hparams["UseTempo"],
+            hp_num_measures=hparams["NumMeasures"],
+            hp_measures_overlap=hparams["MeasuresOverlap"],
+            hp_imfw=hparams["IMFW"],
+            hp_use_augmented_dataset=hparams["UseAugmentedDataset"],
+            hp_num_augmentations=hparams["NumAugmentations"],
+            hp_lstm_hidden_size=hparams["LstmHiddenSize"],
+            hp_lstm_num_layers=hparams["LstmNumLayers"],
+            hp_dropout_rate=hparams["DropoutRate"],
+            hp_lr=hparams["lr"],
+            hp_reg=hparams["reg"],
             min_tracks_per_label=20,
         )
         print("=" * 80)
-        print(f'Run {i + 1}/{len(domain)}')
+        print(f"Run {i + 1}/{len(domain)}")
         print(
-            tabulate.tabulate(list(hparams.items()), headers=['Hyperparameter', 'Value'], tablefmt='rounded_outline')
+            tabulate.tabulate(
+                list(hparams.items()),
+                headers=["Hyperparameter", "Value"],
+                tablefmt="rounded_outline",
+            )
         )
 
         # Checking if same hyperparameters already tested
         existing = False
-        ignored_params = ['training_batch_size', 'training_num_epochs', 'training_patience']
+        ignored_params = ["training_batch_size", "training_num_epochs", "training_patience"]
         if params.results_path.exists():
             new_hparams = copy.deepcopy(params.to_serializable_dict())
             for ignored_param in ignored_params:
                 new_hparams.pop(ignored_param)
-            hparam_files = list(params.results_path.rglob('**/hparams.yaml'))
+            hparam_files = list(params.results_path.rglob("**/hparams.yaml"))
             for hparam_file in hparam_files:
                 if hparam_file.exists():
-                    with open(hparam_file, 'r') as f:
+                    with open(hparam_file, "r") as f:
                         try:
                             hparams = yaml.safe_load(f)
                         except yaml.YAMLError as exc:

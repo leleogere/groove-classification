@@ -1,25 +1,26 @@
 from datetime import datetime
 from pathlib import Path
 
-import torch
 import lightning as L
 import lightning.pytorch as pl
+import torch
 
-from dataset.groove_dataset import GrooveMidiModule
+from cli.parser import ScriptParameters
+from cli.parser import parse_args
 from data_processing.track_processors import TrackProcessor
+from dataset.groove_dataset import GrooveMidiModule
 from models.multivariate_classifier import GenreClassifier
-from cli.parser import ScriptParameters, parse_args
 
 
 def main(params: ScriptParameters):
     # Setup track processor
-    track_processor_param_prefix = f'track_processor_{params.track_processor_type.name}'
+    track_processor_param_prefix = f"track_processor_{params.track_processor_type.name}"
     track_processor_params = {
-        parameter[len(track_processor_param_prefix) + 1:]: getattr(params, parameter)
+        parameter[len(track_processor_param_prefix) + 1 :]: getattr(params, parameter)
         for parameter in params.__dict__.keys()
         if parameter.startswith(track_processor_param_prefix)
     }
-    track_processor_params['use_tempo'] = params.hp_use_tempo
+    track_processor_params["use_tempo"] = params.hp_use_tempo
     track_processor: TrackProcessor = params.track_processor_type.value(**track_processor_params)
     groove_module = GrooveMidiModule(
         path=params.data_path,
@@ -43,23 +44,27 @@ def main(params: ScriptParameters):
 
     # Setup data
     groove_module.prepare_data()
-    groove_module.setup(stage='')
+    groove_module.setup(stage="")
 
     # Compute inverse median frequency weights
     if params.hp_imfw:
-        count_c = {
-            label: sum(groove_module.label_infos[label][split]['chunks'] for split in ['train', 'validation'])
+        class_count = {
+            label: sum(
+                groove_module.label_infos[label][split]["chunks"]
+                for split in ["train", "validation"]
+            )
             for label in groove_module.unique_labels
         }
-        total = sum(count_c.values())
-        freq_c = {label: count / total for label, count in count_c.items()}
-        sorted_freq_c = sorted(freq_c.values())
+        total = sum(class_count.values())
+        class_frequency = {label: count / total for label, count in class_count.items()}
+        sorted_class_frequency = sorted(class_frequency.values())
+        median_idx = len(sorted_class_frequency) // 2
         median_freq = (
-            sorted_freq_c[len(sorted_freq_c) // 2]
-            if len(sorted_freq_c) % 2 == 1
-            else (sorted_freq_c[len(sorted_freq_c) // 2 - 1] + sorted_freq_c[len(sorted_freq_c) // 2]) / 2
+            sorted_class_frequency[median_idx]
+            if len(sorted_class_frequency) % 2 == 1
+            else (sorted_class_frequency[median_idx - 1] + sorted_class_frequency[median_idx]) / 2
         )
-        weights_c = {label: median_freq / freq for label, freq in freq_c.items()}
+        weights_c = {label: median_freq / freq for label, freq in class_frequency.items()}
         weights_c = torch.tensor(list(weights_c.values()), dtype=torch.float32)
     else:
         weights_c = None
@@ -80,16 +85,16 @@ def main(params: ScriptParameters):
 
     # Prepare callbacks
     early_stopping = pl.callbacks.EarlyStopping(
-        monitor='val/loss',
+        monitor="val/loss",
         min_delta=0.00,
         patience=params.training_patience,
-        mode='min',
+        mode="min",
     )
     params.results_path.mkdir(parents=True, exist_ok=True)
     logger = pl.loggers.TensorBoardLogger(
         save_dir=params.results_path,
         name=datetime.now().strftime("%Y-%m-%d"),
-        default_hp_metric=False
+        default_hp_metric=False,
     )
     logger_dir = Path(logger.log_dir)
     logger_dir.mkdir(parents=True, exist_ok=False)
@@ -97,11 +102,15 @@ def main(params: ScriptParameters):
 
     # Train model
     print("Training model...")
-    trainer = L.Trainer(max_epochs=params.training_num_epochs, logger=logger, callbacks=[early_stopping], devices=1)
+    trainer = L.Trainer(
+        max_epochs=params.training_num_epochs,
+        logger=logger,
+        callbacks=[early_stopping],
+        devices=1,
+    )
     trainer.fit(model, datamodule=groove_module)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parameters = parse_args()
     main(parameters)
-

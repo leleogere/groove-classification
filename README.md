@@ -3,7 +3,8 @@
 ## Introduction
 
 This project aims at classify MIDI drum tracks into musical genres.
-We use the [Groove MIDI Dataset](https://magenta.tensorflow.org/datasets/groove) from Google Magenta.
+We use the [Groove MIDI Dataset](https://magenta.tensorflow.org/datasets/groove)
+from Google Magenta.
 
 Multiple classifiers are implemented, in order to compare their performances.
 
