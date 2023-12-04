@@ -12,75 +12,148 @@ from utils.constants import DRUMS
 
 
 class TrackProcessor:
-    short_name = "abstract_track_processor"
+    short_name: str = None
+    padding_value = 0
+    velocity_norm = 127  # max velocity
+    drums = DRUMS
 
-    def __init__(self):
-        pass
+    def __init__(self, use_tempo: bool = True):
+        """Operator that defines how to transform a Track into a tensor.
+
+        :param use_tempo: Whether to use the tempo as an input feature.
+        """
+        self.use_tempo = use_tempo
 
     @property
     def name(self) -> str:
+        """Name of the track processor.
+
+        :return: Name of the track processor.
+        """
         return self.__class__.__name__
 
     def notes_to_tensor(self, track: Track) -> torch.Tensor:
+        """Operation that turn the *note* events of a track into a tensor. The shape of the
+        resulting tensor should be (num_notes, num_features).
+
+        :param track: Track to process.
+        :return: Tensor representation of the track's notes.
+        """
         raise NotImplementedError
 
+    def tempo_to_tensor(self, track: Track) -> torch.Tensor:
+        """Operation that turn the tempo of a track into a tensor.
+
+        :param track: Track to process.
+        :return: Tensor representation of the track's tempo.
+        """
+        return torch.tensor(track.bpm, dtype=torch.float32)
+
+    def label_to_tensor(self, track: Track) -> torch.Tensor:
+        """Operation that turn the label index of a track into a tensor. Note that the label must be
+        encoded as an integer between 0 and 65535 beforehand and stored in track.label_idx.
+
+        :param track: Track to process.
+        :return: Tensor representation of the track's label.
+        """
+        if track.label_idx is None:
+            raise ValueError("Track must have a label index.")
+        if track.label_idx >= 65536:
+            raise ValueError("Label index must be less than 65536.")
+        return torch.tensor(track.label_idx, dtype=torch.int16)  # assert less than 65536 labels
+
     def process_track(self, track: Track) -> ProcessedTrack:
+        """Process a track.
+
+        :param track: Track to process.
+        :return: Processed track, containing the tensor representation of the track's notes, tempo
+            and label.
+        """
         return ProcessedTrack(
-            data=self.notes_to_tensor(track),
+            notes_tensor=self.notes_to_tensor(track),
+            tempo_tensor=self.tempo_to_tensor(track),
+            label_idx_tensor=self.label_to_tensor(track),
             **track.__dict__,
         )
 
-    def collate_samples_fn(self, batch: list[ProcessedTrack]) -> torch.Tensor:
-        return NotImplementedError
+    def collate_samples_fn(self, batch_of_notes_tensors: list[torch.Tensor]) -> torch.Tensor:
+        """Collate function that stacks the note attributes of a batch of tracks.
 
-    def collate_labels_fn(self, batch: list[ProcessedTrack | Track]) -> torch.Tensor:
-        return LongTensor([sample.label_idx for sample in batch])
+        :param batch_of_notes_tensors: Batch of notes tensors of shape (num_notes, num_features)
+            (computed by self.notes_to_tensor).
+        :return: Stacked tensor of shape (batch_size, num_notes, num_features).
+        """
+        if any(sample.ndim != 2 for sample in batch_of_notes_tensors):
+            raise ValueError("All tensors must have 2 dimensions (num_notes, num_features).")
+        # Pad all sequence to the same by adding vectors of self.padding_value (of size
+        # num_features) at the *beginning* of each sequence (see https://arxiv.org/abs/1903.07288).
+        max_sequence_length = max(notes_tensor.shape[0] for notes_tensor in batch_of_notes_tensors)
+        padded = [
+            nn.functional.pad(
+                input=notes_tensor,
+                pad=(0, 0, max_sequence_length - notes_tensor.shape[0], 0),
+                value=self.padding_value,
+            )
+            for notes_tensor in batch_of_notes_tensors
+        ]
+        stacked = torch.stack(padded)
+        return stacked
+
+    def collate_tempos_fn(self, batch_of_tempo_tensors: list[torch.Tensor]) -> torch.Tensor:
+        """Collate function that stacks the tempo attributes of a batch of tracks.
+
+        :param batch_of_tempo_tensors: Batch of tempo tensors (computed by self.tempo_to_tensor).
+        :return: Stacked tensor of shape (batch_size, 1).
+        """
+        return torch.stack(batch_of_tempo_tensors)
+
+    def collate_labels_fn(self, batch_of_label_tensors: list[torch.Tensor]) -> torch.Tensor:
+        """Collate function that stacks the label attributes of a batch of tracks.
+
+        :param batch_of_label_tensors: Batch of label tensors (computed by self.label_to_tensor).
+        :return: Stacked tensor of shape (batch_size,).
+        """
+        return torch.cat(batch_of_label_tensors)
 
     def collate_fn(self, batch: list[ProcessedTrack]) -> dict[str, torch.Tensor]:
-        return {
-            "samples": self.collate_samples_fn(batch),
-            "labels": self.collate_labels_fn(batch),
-        }
+        """Collate function that stacks the attributes of a batch of tracks.
 
-    def output_dim(self):
+        :param batch: Batch of processed tracks (computed by self.process_track).
+        :return: Stacked tensors of shape (batch_size, ...).
+        """
+        results = {
+            "samples": self.collate_samples_fn([pt.notes_tensor for pt in batch]),
+            "labels": self.collate_labels_fn([pt.label_idx_tensor for pt in batch]),
+        }
+        if self.use_tempo:
+            results["tempos"] = self.collate_tempos_fn([pt.tempo_tensor for pt in batch])
+        return results
+
+    @property
+    def output_dim(self) -> int:
+        """Output dimension of the track processor.
+
+        :return: Output dimension of the track processor."""
         raise NotImplementedError
 
     def __call__(self, *args, **kwargs):
         return self.process_track(*args, **kwargs)
 
 
-class TrackProcessorWithTempo(TrackProcessor):
-    def __init__(self, use_tempo: bool = True):
-        super().__init__()
-        self.use_tempo = use_tempo
-
-    def tempo_to_tensor(self, track: Track) -> torch.Tensor:
-        return torch.tensor(track.bpm, dtype=torch.float32)
-
-    def collate_tempos_fn(self, batch: list[ProcessedTrack | Track]) -> torch.Tensor:
-        return torch.stack([self.tempo_to_tensor(sample) for sample in batch])
-
-    def collate_fn(self, batch: list[ProcessedTrack]) -> dict[str, torch.Tensor]:
-        results = super().collate_fn(batch)
-        if self.use_tempo:
-            results["tempos"] = self.collate_tempos_fn(batch)
-        return results
-
-
-class RelativeMultivariateTrackProcessor(TrackProcessorWithTempo):
+class RelativeMultivariateTrackProcessor(TrackProcessor):
     short_name = "multivariate"
-    velocity_norm = 127  # max velocity
     time_norm = 100  # so duration and timeshift are closer to 0-5
-    drums = DRUMS
 
     def __init__(self, use_tempo: bool = True):
         super().__init__(use_tempo=use_tempo)
 
     def notes_to_tensor(self, track: Track):
+        # Turn a list of dict (RelativeNote.__slots__) into a dict of lists.
         note_attributes = defaultdict(list)
         for note in track.relative_notes():
             for key in RelativeNote.__slots__:
                 note_attributes[key].append(getattr(note, key))
+            # Append drum id for one-hot encoding
             note_attributes["id"].append(self.drums.pitch_to_id[note.pitch])
 
         vector_components = [
@@ -100,24 +173,14 @@ class RelativeMultivariateTrackProcessor(TrackProcessorWithTempo):
         vector = torch.cat(vector_components, dim=-1)
         return vector
 
-    def collate_samples_fn(self, batch: list[ProcessedTrack]) -> torch.Tensor:
-        x = [sample.data for sample in batch]
-        padding_value = 0
-        max_len = max(sample.shape[-2] for sample in x)
-        padded = [
-            nn.functional.pad(seq, (0, 0, max_len - seq.shape[-2], 0), value=padding_value)
-            for seq in x
-        ]
-        stacked = torch.stack(padded)
-        return stacked
-
-    def output_dim(self):
-        return (len(self.drums) + 3,)
+    @property
+    def output_dim(self) -> int:
+        # As many features as there are drums + 3 (velocity, duration, timeshift)
+        return len(self.drums) + 3
 
 
-class PianoRollTrackProcessor(RelativeMultivariateTrackProcessor):
+class PianoRollTrackProcessor(TrackProcessor):
     short_name = "pianoroll"
-    drums = DRUMS
 
     def __init__(self, resolution: int = 20, use_tempo: bool = True):
         super().__init__(use_tempo=use_tempo)
@@ -138,8 +201,10 @@ class PianoRollTrackProcessor(RelativeMultivariateTrackProcessor):
             )
         return piano_roll.transpose(0, 1)  # change to (timestep, features)
 
-    def output_dim(self):
-        return (len(self.drums),)
+    @property
+    def output_dim(self) -> int:
+        # As many features as there are drums ("height" of the piano roll)
+        return len(self.drums)
 
 
 class TrackProcessors(Enum):
@@ -154,4 +219,6 @@ class TrackProcessors(Enum):
         try:
             return TrackProcessors[s]
         except KeyError:
-            raise ValueError()
+            raise ValueError(
+                f"Cannot convert {s} to TrackProcessors. Valid values are {list(TrackProcessors)}."
+            )

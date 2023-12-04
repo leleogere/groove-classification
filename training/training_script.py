@@ -72,7 +72,7 @@ def main(params: ScriptParameters):
 
     # Create model
     model = GenreClassifier(
-        num_features=track_processor.output_dim()[0],
+        num_features=track_processor.output_dim,
         lstm_hidden_size=params.hp_lstm_hidden_size,
         lstm_num_layers=params.hp_lstm_num_layers,
         num_classes=len(groove_module.id_to_label),

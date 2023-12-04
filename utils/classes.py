@@ -153,8 +153,12 @@ class Track:
 class ProcessedTrack(Track):
     def __init__(
         self,
-        data: torch.Tensor,
+        notes_tensor: torch.Tensor,
+        tempo_tensor: torch.Tensor,
+        label_idx_tensor: torch.Tensor,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.data = data
+        self.notes_tensor = notes_tensor
+        self.tempo_tensor = tempo_tensor
+        self.label_idx_tensor = label_idx_tensor
