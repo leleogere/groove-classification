@@ -41,27 +41,6 @@ class TrackProcessor:
         """
         raise NotImplementedError
 
-    def tempo_to_tensor(self, track: Track) -> torch.Tensor:
-        """Operation that turn the tempo of a track into a tensor.
-
-        :param track: Track to process.
-        :return: Tensor representation of the track's tempo.
-        """
-        return torch.tensor(track.bpm, dtype=torch.float32)
-
-    def label_to_tensor(self, track: Track) -> torch.Tensor:
-        """Operation that turn the label index of a track into a tensor. Note that the label must be
-        encoded as an integer between 0 and 65535 beforehand and stored in track.label_idx.
-
-        :param track: Track to process.
-        :return: Tensor representation of the track's label.
-        """
-        if track.label_idx is None:
-            raise ValueError("Track must have a label index.")
-        if track.label_idx >= 65536:
-            raise ValueError("Label index must be less than 65536.")
-        return torch.tensor(track.label_idx, dtype=torch.int16)  # assert less than 65536 labels
-
     def process_track(self, track: Track) -> ProcessedTrack:
         """Process a track.
 
@@ -71,8 +50,6 @@ class TrackProcessor:
         """
         return ProcessedTrack(
             notes_tensor=self.notes_to_tensor(track),
-            tempo_tensor=self.tempo_to_tensor(track),
-            label_idx_tensor=self.label_to_tensor(track),
             **track.__dict__,
         )
 
@@ -99,21 +76,22 @@ class TrackProcessor:
         stacked = torch.stack(padded)
         return stacked
 
-    def collate_tempos_fn(self, batch_of_tempo_tensors: list[torch.Tensor]) -> torch.Tensor:
-        """Collate function that stacks the tempo attributes of a batch of tracks.
+    def collate_tempos_fn(self, batch_of_bpm: list[float]) -> torch.Tensor:
+        """Collate function that stacks a list of bpm.
 
-        :param batch_of_tempo_tensors: Batch of tempo tensors (computed by self.tempo_to_tensor).
+        :param batch_of_bpm: Batch of bpm.
         :return: Stacked tensor of shape (batch_size, 1).
         """
-        return torch.stack(batch_of_tempo_tensors)
+        return torch.FloatTensor(batch_of_bpm).unsqueeze(-1)
 
-    def collate_labels_fn(self, batch_of_label_tensors: list[torch.Tensor]) -> torch.Tensor:
-        """Collate function that stacks the label attributes of a batch of tracks.
+    def collate_labels_fn(self, batch_of_label_idxs: list[int]) -> torch.Tensor:
+        """Collate function that stacks a list of label_idx. Note that the label_idx must be
+        encoded as integers beforehand.
 
-        :param batch_of_label_tensors: Batch of label tensors (computed by self.label_to_tensor).
+        :param batch_of_label_idxs: Batch of label indices.
         :return: Stacked tensor of shape (batch_size,).
         """
-        return torch.cat(batch_of_label_tensors)
+        return torch.LongTensor(batch_of_label_idxs)
 
     def collate_fn(self, batch: list[ProcessedTrack]) -> dict[str, torch.Tensor]:
         """Collate function that stacks the attributes of a batch of tracks.
@@ -123,10 +101,10 @@ class TrackProcessor:
         """
         results = {
             "samples": self.collate_samples_fn([pt.notes_tensor for pt in batch]),
-            "labels": self.collate_labels_fn([pt.label_idx_tensor for pt in batch]),
+            "labels": self.collate_labels_fn([pt.label_idx for pt in batch]),
         }
         if self.use_tempo:
-            results["tempos"] = self.collate_tempos_fn([pt.tempo_tensor for pt in batch])
+            results["tempos"] = self.collate_tempos_fn([pt.bpm for pt in batch])
         return results
 
     @property
