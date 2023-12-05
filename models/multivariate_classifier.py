@@ -66,7 +66,7 @@ class GenreClassifier(L.LightningModule):
         x = self.dropout(x[:, -1, :])
         # print(f'After dropout: {x.shape = }')
         if self.use_tempo:
-            x = torch.cat([x, tempo.unsqueeze(-1)], dim=-1)
+            x = torch.cat([x, tempo], dim=-1)
         # print(f'Before linear: {x.shape = }')
         x = self.linear(x)
         # print(f'End forward: {x.shape = }')
