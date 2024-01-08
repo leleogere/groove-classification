@@ -280,10 +280,10 @@ class GrooveMidiModule(L.LightningDataModule):
                 self.augment_dataset_kwargs["augmented_path"]
                 / f"augmentations={self.augment_dataset_kwargs['num_augmentations']}"
             )
+            # Augment only the train set
             augment_midi_dataset(datasets[train_key], in_place=True, **self.augment_dataset_kwargs)
-            for split in split_keys:
-                for track in datasets[split].tracks:
-                    self.label_infos[track.label][split]["augmented"] += 1
+            for track in datasets[train_key].tracks:
+                self.label_infos[track.label][train_key]["augmented"] += 1
 
         # Split dataset into measures if needed
         if self.split_dataset_into_measures:
