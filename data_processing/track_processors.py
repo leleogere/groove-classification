@@ -100,6 +100,7 @@ class TrackProcessor:
         :return: Stacked tensors of shape (batch_size, ...).
         """
         results = {
+            "midi_paths": [pt.midi_path for pt in batch],
             "samples": self.collate_samples_fn([pt.notes_tensor for pt in batch]),
             "labels": self.collate_labels_fn([pt.label_idx for pt in batch]),
         }
