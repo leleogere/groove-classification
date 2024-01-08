@@ -42,6 +42,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--start-at", type=int, default=0, help="Index of the first hyperparameter set to run."
     )
+    parser.add_argument(
+        "--skip-already-tested-hps",
+        action="store_true",
+        help="Skip already tested hyperparameters.",
+    )
     args = parser.parse_args()
 
     HYPERPARAMETERS = [
@@ -122,29 +127,33 @@ if __name__ == "__main__":
         )
 
         # Checking if same hyperparameters already tested
-        existing = False
-        ignored_params = ["training_batch_size", "training_num_epochs", "training_patience"]
-        if params.results_path.exists():
-            new_hparams = copy.deepcopy(params.to_serializable_dict())
-            for ignored_param in ignored_params:
-                new_hparams.pop(ignored_param)
-            hparam_files = list(params.results_path.rglob("**/hparams.yaml"))
-            for hparam_file in hparam_files:
-                if hparam_file.exists():
-                    with open(hparam_file, "r") as f:
-                        try:
-                            hparams = yaml.safe_load(f)
-                        except yaml.YAMLError as exc:
-                            print(f"Error in loading {hparam_file}: exc")
-                            continue
-                    for ignored_param in ignored_params:
-                        hparams.pop(ignored_param)
-                    if hparams == new_hparams:
-                        existing = True
-                        break
-        if existing:
-            print(f"Skipping run as same hyperparameters already tested in '{hparam_file.parent}'.")
-            continue
+        if args.skip_already_tested_hps:
+            existing = False
+            ignored_params = ["training_batch_size", "training_num_epochs", "training_patience"]
+            if params.results_path.exists():
+                new_hparams = copy.deepcopy(params.to_serializable_dict())
+                for ignored_param in ignored_params:
+                    new_hparams.pop(ignored_param)
+                hparam_files = list(params.results_path.rglob("**/hparams.yaml"))
+                for hparam_file in hparam_files:
+                    if hparam_file.exists():
+                        with open(hparam_file, "r") as f:
+                            try:
+                                hparams = yaml.safe_load(f)
+                            except yaml.YAMLError as exc:
+                                print(f"Error in loading {hparam_file}: exc")
+                                continue
+                        for ignored_param in ignored_params:
+                            hparams.pop(ignored_param)
+                        if hparams == new_hparams:
+                            existing = True
+                            break
+            if existing:
+                print(
+                    "Skipping run as same hyperparameters already tested in"
+                    f" '{hparam_file.parent}'."
+                )
+                continue
 
         main(params)
         # Try to release GPU memory
