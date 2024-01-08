@@ -110,6 +110,8 @@ def main(params: ScriptParameters):
     )
     trainer.fit(model, datamodule=groove_module)
 
+    groove_module.memory.reduce_size(bytes_limit="100G")  # TODO: make this configurable
+
 
 if __name__ == "__main__":
     parameters = parse_args()
