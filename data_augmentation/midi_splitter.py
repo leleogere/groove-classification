@@ -232,7 +232,7 @@ class Splitter:
         for midi_path, midi_size in zip(midi_paths, midi_sizes):
             current_out_path = out_path / midi_path.relative_to(root_path).with_suffix("")
             if current_out_path.exists() and not overwrite_existing:
-                chunk_file_paths[midi_path].extend(list(current_out_path.rglob("*.mid")))
+                chunk_file_paths[midi_path].extend(sorted(list(current_out_path.rglob("*.mid"))))
                 pbar.update(midi_size)
                 continue
             current_out_path.parent.mkdir(parents=True, exist_ok=True)
