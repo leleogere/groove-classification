@@ -27,10 +27,10 @@ def sliding_window(seq: Sequence, window_size: int = 2) -> Sequence[Sequence]:
         return []
     # Return the windows
     windows = []
-    range_end = max(
+    num_windows = max(
         1, len(seq) - window_size + 1
-    )  # ensure that we deal with window_size > len(sequence)
-    for i in range(0, range_end):
+    )  # max(1, n) to ensure that we deal with window_size > len(sequence)
+    for i in range(0, num_windows):
         windows.append(seq[i : i + window_size])
     return windows
 
@@ -38,7 +38,6 @@ def sliding_window(seq: Sequence, window_size: int = 2) -> Sequence[Sequence]:
 def non_sliding_window(seq: Sequence, window_size: int = 2) -> Sequence[Sequence]:
     """
     Returns a sequence of non-overlapping chunks of the input sequence.
-    the defined chunks of input sequence.
     :param seq: The sequence to iterate over.
     :param window_size: The size of the window.
     :return: A sequence of chunks of the input sequence.
@@ -70,15 +69,27 @@ class Splitter:
         self.num_measures_per_chunk = num_measures_per_chunk
         self.chunk_overlap = chunk_overlap
 
-    def _get_chunk_measures(self, num_measures: int) -> Sequence[Sequence[int]]:
+    def _get_measures_contained_by_each_chunk(self, total_measures: int) -> Sequence[Sequence[int]]:
+        """
+        Get the measures contained by each chunk.
+        :param total_measures:
+        :return: A sequence of chunks of the input sequence.
+        :example:
+            >>> splitter = Splitter(num_measures_per_chunk=3, chunk_overlap=True)
+            >>> splitter._get_measures_contained_by_each_chunk(total_measures=8)
+            [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7]]
+            >>> splitter = Splitter(num_measures_per_chunk=3, chunk_overlap=False)
+            >>> splitter._get_measures_contained_by_each_chunk(total_measures=8)
+            [[0, 1, 2], [3, 4, 5], [6, 7]]
+        """
         if self.chunk_overlap:
             return sliding_window(
-                list(range(0, num_measures)),
+                list(range(0, total_measures)),
                 window_size=self.num_measures_per_chunk,
             )
         else:
             return non_sliding_window(
-                list(range(0, num_measures)),
+                list(range(0, total_measures)),
                 window_size=self.num_measures_per_chunk,
             )
 
@@ -102,13 +113,15 @@ class Splitter:
         bpm = midi.get_tempo_changes()[1][0]
         time_signature = midi.time_signature_changes[0]
 
-        # Get measure timings
-        bar_locations = midi.get_downbeats().tolist()
-        measure_duration = bar_locations[1] if len(bar_locations) > 1 else midi.get_end_time()
+        # Get the starting time of each measure
+        measure_locations = midi.get_downbeats().tolist()
+        measure_duration = (
+            measure_locations[1] if len(measure_locations) > 1 else midi.get_end_time()
+        )
         chunk_duration = measure_duration * self.num_measures_per_chunk
-        if abs(bar_locations[-1] - midi.get_end_time()) > measure_duration / 2:
-            bar_locations.append(midi.get_end_time())
-        num_measures = len(bar_locations) - 1
+        num_measures = len(measure_locations) - 1
+        # The remaining part is dropped (the one between the last measure and the end of the MIDI
+        # file) as either not long enough, or at least very likely not representative of the genre
 
         # Prepare output
         formatting_number_width = len(str(num_measures))
@@ -116,23 +129,26 @@ class Splitter:
         chunk_file_paths = []
 
         # Prepare loop
-        chunk_measures = self._get_chunk_measures(num_measures)
-        chunk_measures_starts_and_ends = [(chunk[0], chunk[-1] + 1) for chunk in chunk_measures]
-        chunk_time_starts_and_ends = [
-            (bar_locations[start], bar_locations[end])
-            for start, end in chunk_measures_starts_and_ends
+        measures_in_each_chunk = self._get_measures_contained_by_each_chunk(num_measures)
+        chunk_measures_start_and_end_measures = [
+            (current_chunk_measures[0], current_chunk_measures[-1] + 1)
+            for current_chunk_measures in measures_in_each_chunk
         ]
-        num_chunks = len(chunk_time_starts_and_ends)
+        chunk_measures_start_and_end_times = [
+            (measure_locations[start], measure_locations[end])
+            for start, end in chunk_measures_start_and_end_measures
+        ]
+        num_chunks = len(chunk_measures_start_and_end_times)
         if num_chunks == 0:
             print(f"No chunks in {path}.")
             return []
         measure_idx_to_chunk_idxs = {
-            i: [j for j, measures in enumerate(chunk_measures) if i in measures]
+            i: {j for j, measures in enumerate(measures_in_each_chunk) if i in measures}
             for i in range(num_measures)
         }
 
         # Prepare MIDI template
-        def create_template() -> pm.PrettyMIDI:
+        def create_chunk_template() -> pm.PrettyMIDI:
             chunk_template = pm.PrettyMIDI(initial_tempo=bpm, resolution=midi.resolution)
             chunk_template.time_signature_changes.append(time_signature)
             chunk_template.instruments.append(
@@ -140,31 +156,37 @@ class Splitter:
             )
             return chunk_template
 
-        chunks = [create_template() for _ in range(num_chunks)]
+        chunks = [create_chunk_template() for _ in range(num_chunks)]
 
         # Loop over notes
         current_measure = 0
-        current_measure_end = bar_locations[1]
+        current_measure_end = measure_locations[1]
         for note in tqdm(
-            sorted(track.notes, key=lambda n: n.start),
+            sorted(track.notes, key=lambda n: n.start),  # make sure notes are sorted by start time
             total=len(track.notes),
             unit="note",
             disable=not pbar,
             leave=False,
         ):
+            # If current note starts after the end of the current measure, move to the next measure
             if note.start >= current_measure_end:
                 current_measure += 1
+                # Break if last measure
                 if current_measure >= num_measures:
                     break
-                current_measure_end = bar_locations[current_measure + 1]
-            chunks_to_add_note_to = measure_idx_to_chunk_idxs[current_measure]
+                current_measure_end = measure_locations[current_measure + 1]
+            # Get all chunks in which the current note should be added
+            chunks_to_add_note_to = measure_idx_to_chunk_idxs[current_measure].copy()
+            # If the note ends after the end of the current measure, add we need to add it to
             if note.end > current_measure_end and current_measure + 1 < num_measures:
-                chunks_to_add_note_to.extend(measure_idx_to_chunk_idxs[current_measure + 1])
+                chunks_to_add_note_to.update(measure_idx_to_chunk_idxs[current_measure + 1])
+                breakpoint()
+            # Add the note to each chunk it should be added to
             for chunk_idx in chunks_to_add_note_to:
-                chunk_start = chunk_time_starts_and_ends[chunk_idx][0]
+                chunk_start = chunk_measures_start_and_end_times[chunk_idx][0]
                 note_start = max(0.0, note.start - chunk_start)
                 note_end = min(chunk_duration, note.end - chunk_start)
-                if abs(note_start - note_end) > 1e-8:
+                if abs(note_start - note_end) > 1e-8:  # Filter out notes that are too short
                     chunks[chunk_idx].instruments[0].notes.append(
                         pm.Note(
                             velocity=note.velocity,
@@ -173,16 +195,17 @@ class Splitter:
                             end=note_end,
                         )
                     )
-        # Loop over chunks, fix note timings and save them
+        # Loop over all chunks, fix eventual note timings (there should be none but just in case)
+        # and save them
         for i, chunk in enumerate(chunks):
-            # Don't save empty chunks
             chunk.remove_invalid_notes()
+            # Don't save empty chunks
             if not chunk.instruments[0].notes:
                 continue
             chunk_file_path = out_path / _chunk_filename(
                 original_midi_path=path,
-                start_bar=chunk_measures_starts_and_ends[i][0],
-                num_bars=len(chunk_measures[i]),
+                start_bar=chunk_measures_start_and_end_measures[i][0],
+                num_bars=len(measures_in_each_chunk[i]),
                 formatting_number_width=formatting_number_width,
             )
             chunk.write(str(chunk_file_path))
@@ -266,4 +289,4 @@ if __name__ == "__main__":
     # test_midi_path = Path('groove/drummer1/session2/111_rock-prog_110_beat_5-4.mid')
     splitter = Splitter(num_measures_per_chunk=1, chunk_overlap=False)
     # splitter(test_midi_path, out_path=Path('/tmp/tests'))
-    splitter(test_midi_path, out_path=Path("/tmp/tests"))
+    splitter(test_midi_path, out_path=Path("/tmp/split"))
