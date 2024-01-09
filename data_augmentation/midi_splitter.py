@@ -180,7 +180,6 @@ class Splitter:
             # If the note ends after the end of the current measure, add we need to add it to
             if note.end > current_measure_end and current_measure + 1 < num_measures:
                 chunks_to_add_note_to.update(measure_idx_to_chunk_idxs[current_measure + 1])
-                breakpoint()
             # Add the note to each chunk it should be added to
             for chunk_idx in chunks_to_add_note_to:
                 chunk_start = chunk_measures_start_and_end_times[chunk_idx][0]
