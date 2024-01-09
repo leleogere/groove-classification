@@ -182,10 +182,12 @@ class Splitter:
                 chunks_to_add_note_to.update(measure_idx_to_chunk_idxs[current_measure + 1])
             # Add the note to each chunk it should be added to
             for chunk_idx in chunks_to_add_note_to:
+                # Convert note start and end to chunk-relative time
                 chunk_start = chunk_measures_start_and_end_times[chunk_idx][0]
                 note_start = max(0.0, note.start - chunk_start)
                 note_end = min(chunk_duration, note.end - chunk_start)
-                if abs(note_start - note_end) > 1e-8:  # Filter out notes that are too short
+                # Filter out notes that are too short and add the note to the chunk
+                if abs(note_start - note_end) > 1e-8:
                     chunks[chunk_idx].instruments[0].notes.append(
                         pm.Note(
                             velocity=note.velocity,
@@ -197,6 +199,7 @@ class Splitter:
         # Loop over all chunks, fix eventual note timings (there should be none but just in case)
         # and save them
         for i, chunk in enumerate(chunks):
+            # Fix eventual invalid notes (there should not be any but just in case)
             chunk.remove_invalid_notes()
             # Don't save empty chunks
             if not chunk.instruments[0].notes:
