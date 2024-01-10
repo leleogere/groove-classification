@@ -29,6 +29,7 @@ class GenreClassifier(L.LightningModule):
         super().__init__()
         bidirectional = True
         self.use_tempo = use_tempo
+        self.input_normalization = nn.BatchNorm1d(num_features)
         self.lstm = nn.LSTM(
             num_features,
             lstm_hidden_size,
@@ -41,6 +42,7 @@ class GenreClassifier(L.LightningModule):
         lin_input_size = 2 * lstm_hidden_size if bidirectional else lstm_hidden_size
         if self.use_tempo:
             lin_input_size += 1
+        self.batch_normalization = nn.BatchNorm1d(lin_input_size)
         self.linear = nn.Linear(lin_input_size, num_classes)
         self.lr = lr
         self.num_classes = num_classes
@@ -60,9 +62,11 @@ class GenreClassifier(L.LightningModule):
         self._reset_accumulated_predictions()
 
     def forward(self, x, tempo=None):
+        x = self.input_normalization(x)
         # print(f'Before LSTM: {x.shape = }')
         x, _ = self.lstm(x)
         # print(f'After LSTM: {x.shape = }')
+        x = self.batch_normalization(x)
         x = self.dropout(x[:, -1, :])
         # print(f'After dropout: {x.shape = }')
         if self.use_tempo:
