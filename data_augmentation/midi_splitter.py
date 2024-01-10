@@ -218,7 +218,7 @@ class Splitter:
                 if num_notes == 0:
                     # if no notes in the chunk
                     drop_message = "no_notes"
-                elif num_notes < 7:
+                elif num_notes < 7 * self.num_measures_per_chunk:
                     # if too few notes in the chunk
                     drop_message = "not_enough_notes"
                 elif num_empty_measures > self.num_measures_per_chunk // 2:
