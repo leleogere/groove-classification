@@ -140,7 +140,7 @@ class Splitter:
         ]
         num_chunks = len(chunk_measures_start_and_end_times)
         if num_chunks == 0:
-            print(f"No chunks in {path}.")
+            # print(f"No chunks in {path}.")
             return []
         measure_idx_to_chunk_idxs = {
             i: {j for j, measures in enumerate(measures_in_each_chunk) if i in measures}
@@ -230,7 +230,7 @@ class Splitter:
 
                 # Drop the chunk if needed
                 if drop_message is not None:
-                    print(f"Chunk {i} of {path} dropped ({drop_message}).")
+                    # print(f"Chunk {i} of {path} dropped ({drop_message}).")
                     f.write(
                         f"{chunk_measures_start_and_end_times[i][0]},"
                         f"{chunk_measures_start_and_end_times[i][1]},"
