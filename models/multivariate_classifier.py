@@ -1,3 +1,4 @@
+import time
 from typing import Callable
 
 import lightning as L
@@ -29,7 +30,7 @@ class GenreClassifier(L.LightningModule):
         super().__init__()
         bidirectional = True
         self.use_tempo = use_tempo
-        self.input_normalization = nn.BatchNorm1d(num_features)
+        # self.input_normalization = nn.BatchNorm1d(num_features)
         self.lstm = nn.LSTM(
             num_features,
             lstm_hidden_size,
@@ -62,16 +63,18 @@ class GenreClassifier(L.LightningModule):
         self._reset_accumulated_predictions()
 
     def forward(self, x, tempo=None):
-        x = self.input_normalization(x)
         # print(f'Before LSTM: {x.shape = }')
         x, _ = self.lstm(x)
-        # print(f'After LSTM: {x.shape = }')
-        x = self.batch_normalization(x)
-        x = self.dropout(x[:, -1, :])
-        # print(f'After dropout: {x.shape = }')
+        # print(f"After LSTM: {x.shape = }")
+        x = x[:, -1, :]  # Keep only last step
+        # Add tempo
         if self.use_tempo:
             x = torch.cat([x, tempo], dim=-1)
-        # print(f'Before linear: {x.shape = }')
+        # print(f'Before batch norm: {x.shape = }')
+        x = self.batch_normalization(x)
+        # print(f'After batch norm: {x.shape = }')
+        x = self.dropout(x)
+        # print(f'After dropout: {x.shape = }')
         x = self.linear(x)
         # print(f'End forward: {x.shape = }')
         return x
