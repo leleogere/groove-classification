@@ -9,7 +9,7 @@ from cli.parser import ScriptParameters
 from cli.parser import parse_args
 from data_processing.track_processors import TrackProcessor
 from dataset.groove_dataset import GrooveMidiModule
-from models.multivariate_classifier import GenreClassifier
+from models.genre_classifier import GenreClassifier
 
 
 def main(params: ScriptParameters):
