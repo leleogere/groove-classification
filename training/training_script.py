@@ -9,7 +9,7 @@ from cli.parser import ScriptParameters
 from cli.parser import parse_args
 from data_processing.track_processors import TrackProcessor
 from dataset.groove_dataset import GrooveMidiModule
-from models.genre_classifier import GenreClassifier
+from models.genre_classifier import GenreClassifier, GenreClassifierLSTM, GenreClassifierTransformer
 
 
 def main(params: ScriptParameters):
@@ -20,7 +20,7 @@ def main(params: ScriptParameters):
         for parameter in params.__dict__.keys()
         if parameter.startswith(track_processor_param_prefix)
     }
-    track_processor_params["use_tempo"] = params.hp_use_tempo
+    track_processor_params["use_tempo"] = params.use_tempo
     track_processor: TrackProcessor = params.track_processor_type.value(**track_processor_params)
     groove_module = GrooveMidiModule(
         path=params.data_path,
@@ -31,13 +31,13 @@ def main(params: ScriptParameters):
         split_dataset_into_measures=True,
         split_dataset_into_measures_kwargs=dict(
             split_path=params.processed_data_path / "split",
-            num_measures_per_chunk=params.hp_num_measures,
-            chunk_overlap=params.hp_measures_overlap,
+            num_measures_per_chunk=params.num_measures_per_chunk,
+            chunk_overlap=params.chunk_overlap,
         ),
-        augment_dataset=params.hp_use_augmented_dataset,
+        augment_dataset=params.num_augmentations > 0,
         augment_dataset_kwargs=dict(
             augmented_path=params.processed_data_path / "augmented",
-            num_augmentations=params.hp_num_augmentations,
+            num_augmentations=params.num_augmentations,
             seed=22,
         ),
     )
@@ -47,7 +47,7 @@ def main(params: ScriptParameters):
     groove_module.setup(stage="")
 
     # Compute inverse median frequency weights
-    if params.hp_imfw:
+    if params.use_imfw:
         class_count = {
             label: sum(
                 groove_module.label_infos[label][split]["chunks"]
@@ -71,14 +71,28 @@ def main(params: ScriptParameters):
     loss = torch.nn.CrossEntropyLoss(weight=weights_c)
 
     # Create model
-    model = GenreClassifier(
-        num_features=track_processor.output_dim,
-        lstm_hidden_size=params.hp_lstm_hidden_size,
-        lstm_num_layers=params.hp_lstm_num_layers,
+    if params.model_type.name == "lstm":
+        model_specific_params = {
+            "hidden_size": params.model_lstm_hidden_size,
+            "num_layers": params.model_lstm_hidden_size,
+        }
+    elif params.model_type.name == "transformer":
+        model_specific_params = {
+            "num_heads": params.model_transformer_num_heads,
+            "feedforward_dim": params.model_transformer_feedforward_dim,
+            "num_layers": params.model_transformer_num_layers,
+        }
+    else:
+        raise ValueError(f"Unknown model name: {params.model_type.name}")
+    model = params.model_type.value(
+        input_dim=track_processor.output_dim,
+        **model_specific_params,
         num_classes=len(groove_module.id_to_label),
-        class_names=list(groove_module.label_to_id.keys()),
-        dropout_rate=params.hp_dropout_rate,
-        use_tempo=params.hp_use_tempo,
+        dropout_rate=params.model_dropout_rate,
+        lr=params.training_learning_rate,
+        use_tempo=params.use_tempo,
+        class_names=groove_module.unique_labels,
+        name=params.model_type.name,
         loss_function=loss,
         hparams_to_log=params.to_serializable_dict(),
     )

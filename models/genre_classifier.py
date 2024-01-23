@@ -1,4 +1,5 @@
 import time
+from enum import Enum
 from typing import Callable
 
 import lightning as L
@@ -6,6 +7,8 @@ import torch
 from torch import nn
 from torchmetrics.classification import MulticlassF1Score
 
+from models.transformers_old import TransformerEncoder
+from models.utils import TupleExtractor
 from utils.confusion_matrix import confusion_matrix_pipeline
 
 
@@ -15,9 +18,8 @@ class GenreClassifier(L.LightningModule):
 
     def __init__(
         self,
-        num_features: int,
-        lstm_hidden_size: int,
-        lstm_num_layers: int,
+        base_module: nn.Module,
+        base_module_output_dim: int,
         num_classes: int,
         dropout_rate: float = 0.1,
         lr: float = 1e-3,
@@ -28,23 +30,14 @@ class GenreClassifier(L.LightningModule):
         hparams_to_log: dict = None,
     ):
         super().__init__()
-        bidirectional = True
         self.use_tempo = use_tempo
-        # self.input_normalization = nn.BatchNorm1d(num_features)
-        self.lstm = nn.LSTM(
-            num_features,
-            lstm_hidden_size,
-            num_layers=lstm_num_layers,
-            batch_first=True,
-            bidirectional=bidirectional,
-            dropout=dropout_rate,
-        )
+        self.base_module = base_module
+        self.base_module_output_dim = base_module_output_dim
         self.dropout = nn.Dropout(dropout_rate)
-        lin_input_size = 2 * lstm_hidden_size if bidirectional else lstm_hidden_size
         if self.use_tempo:
-            lin_input_size += 1
-        self.batch_normalization = nn.BatchNorm1d(lin_input_size)
-        self.linear = nn.Linear(lin_input_size, num_classes)
+            self.base_module_output_dim += 1
+        self.batch_normalization = nn.BatchNorm1d(self.base_module_output_dim)
+        self.linear = nn.Linear(self.base_module_output_dim, num_classes)
         self.lr = lr
         self.num_classes = num_classes
         self.name = name
@@ -63,9 +56,9 @@ class GenreClassifier(L.LightningModule):
         self._reset_accumulated_predictions()
 
     def forward(self, x, tempo=None):
-        # print(f'Before LSTM: {x.shape = }')
-        x, _ = self.lstm(x)
-        # print(f"After LSTM: {x.shape = }")
+        # print(f"Before module: {x.shape = }")
+        x = self.base_module(x)
+        # print(f"After module: {x.shape = }")
         x = x[:, -1, :]  # Keep only last step
         # Add tempo
         if self.use_tempo:
@@ -148,3 +141,105 @@ class GenreClassifier(L.LightningModule):
             }
         else:
             self.accumulated_predictions[key] = default_dict()
+
+
+class GenreClassifierLSTM(GenreClassifier):
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_size: int,
+        num_layers: int,
+        num_classes: int,
+        dropout_rate: float = 0.1,
+        lr: float = 1e-3,
+        use_tempo: bool = False,
+        class_names: list[str] = None,
+        name: str = None,
+        loss_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = nn.CrossEntropyLoss(),
+        hparams_to_log: dict = None,
+    ):
+        lstm = nn.LSTM(
+            input_dim,
+            hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            bidirectional=True,
+            dropout=dropout_rate,
+        )
+        element_extractor = TupleExtractor(index=0)
+        module = nn.Sequential(lstm, element_extractor)
+        super().__init__(
+            base_module=module,
+            base_module_output_dim=2 * hidden_size,
+            num_classes=num_classes,
+            dropout_rate=dropout_rate,
+            lr=lr,
+            use_tempo=use_tempo,
+            class_names=class_names,
+            name=name,
+            loss_function=loss_function,
+            hparams_to_log=hparams_to_log,
+        )
+
+
+class GenreClassifierTransformer(GenreClassifier):
+    def __init__(
+        self,
+        input_dim: int,
+        num_heads: int,
+        feedforward_dim: int,
+        num_layers: int,
+        num_classes: int,
+        dropout_rate: float = 0.1,
+        lr: float = 1e-3,
+        use_tempo: bool = False,
+        class_names: list[str] = None,
+        name: str = None,
+        loss_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = nn.CrossEntropyLoss(),
+        hparams_to_log: dict = None,
+    ):
+        # Padding necessary as transformer expects d_model to be divisible by nhead
+        padding_to_add = num_heads - input_dim % num_heads
+        padder = nn.ZeroPad1d(padding=(0, padding_to_add))
+        new_input_dim = input_dim + padding_to_add
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=new_input_dim,
+            nhead=num_heads,
+            dim_feedforward=feedforward_dim,
+            dropout=dropout_rate,
+        )
+        encoder = nn.TransformerEncoder(
+            encoder_layer=encoder_layer,
+            num_layers=num_layers,
+        )
+        module = nn.Sequential(padder, encoder)
+        super().__init__(
+            base_module=module,
+            base_module_output_dim=new_input_dim,
+            num_classes=num_classes,
+            dropout_rate=dropout_rate,
+            lr=lr,
+            use_tempo=use_tempo,
+            class_names=class_names,
+            name=name,
+            loss_function=loss_function,
+            hparams_to_log=hparams_to_log,
+        )
+
+
+class GenreClassifierType(Enum):
+    lstm = GenreClassifierLSTM
+    transformer = GenreClassifierTransformer
+
+    def __str__(self):
+        return self.name
+
+    @staticmethod
+    def from_str(s: str):
+        try:
+            return GenreClassifierType[s]
+        except KeyError:
+            raise ValueError(
+                f"Cannot convert {s} to TrackProcessors. Valid values are"
+                f" {list(GenreClassifierType)}."
+            )

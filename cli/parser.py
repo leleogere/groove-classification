@@ -3,6 +3,7 @@ from pathlib import Path
 from pprint import pformat
 
 from data_processing.track_processors import TrackProcessors
+from models.genre_classifier import GenreClassifierType
 
 
 @dataclass(frozen=True)
@@ -11,27 +12,31 @@ class ScriptParameters:
     data_path: Path
     processed_data_path: Path
     results_path: Path
-    # Track processor parameters
-    track_processor_type: TrackProcessors
-    track_processor_pianoroll_resolution: int
     # Training parameters
     training_batch_size: int
     training_num_epochs: int
     training_patience: int
-    # Hyperparameters
-    hp_lstm_hidden_size: int
-    hp_lstm_num_layers: int
-    hp_dropout_rate: float
-    hp_lr: float
-    hp_reg: float
-    hp_num_measures: int
-    hp_measures_overlap: bool
-    hp_imfw: bool
-    hp_use_tempo: bool
-    hp_use_augmented_dataset: bool
-    hp_num_augmentations: int
-    # Others
+    training_learning_rate: float
+    training_l2_regularization: float
+    # Track processor parameters
+    track_processor_type: TrackProcessors
+    track_processor_pianoroll_resolution: int
+    # Models parameters
+    model_type: GenreClassifierType
+    model_lstm_hidden_size: int
+    model_lstm_num_layers: int
+    model_transformer_num_heads: int
+    model_transformer_feedforward_dim: int
+    model_transformer_num_layers: int
+    model_dropout_rate: float
+    # Data augmentation parameters
+    num_measures_per_chunk: int
+    chunk_overlap: bool
+    num_augmentations: int
+    # Others parameters
     min_tracks_per_label: int
+    use_imfw: bool
+    use_tempo: bool
 
     def __str__(self):
         return pformat(self.__dict__)
@@ -78,22 +83,6 @@ def parse_args() -> ScriptParameters:
         help="Path to the results.",
     )
 
-    # Track processor group
-    track_processor_group = parser.add_argument_group("Track processor")
-    track_processor_group.add_argument(
-        "--track-processor",
-        type=TrackProcessors.from_str,
-        required=True,
-        choices=list(TrackProcessors),
-        help="Track processor type.",
-    )
-    track_processor_group.add_argument(
-        "--track-processor-pianoroll-resolution",
-        type=int,
-        default=30,
-        help=f"Pianoroll resolution in steps per second (only for {TrackProcessors.pianoroll}).",
-    )
-
     # Training group
     training_group = parser.add_argument_group("Training")
     training_group.add_argument(
@@ -114,74 +103,102 @@ def parse_args() -> ScriptParameters:
         default=40,
         help="Number of epochs for training.",
     )
-
-    # Hyperparameters group
-    hp_group = parser.add_argument_group("Hyperparameters")
-    hp_group.add_argument(
-        "--hp-lstm-hidden-size",
-        type=int,
-        default=32,
-        help="Number of hidden units in the LSTM layer.",
-    )
-    hp_group.add_argument(
-        "--hp-lstm-num-layers",
-        type=int,
-        default=2,
-        help="Number of layers in the LSTM layer.",
-    )
-    hp_group.add_argument(
-        "--hp-dropout-rate",
-        type=float,
-        default=0.3,
-        help="Dropout rate.",
-    )
-    hp_group.add_argument(
-        "--hp-lr",
+    training_group.add_argument(
+        "--training-learning-rate",
         type=float,
         default=1e-3,
         help="Learning rate.",
     )
-    hp_group.add_argument(
-        "--hp-reg",
+    training_group.add_argument(
+        "--training-l2-regularization",
         type=float,
         default=1e-4,
         help="Regularization parameter.",
     )
-    hp_group.add_argument(
-        "--hp-num-measures",
+
+    # Track processor group
+    track_processor_group = parser.add_argument_group("Track processor")
+    track_processor_group.add_argument(
+        "--track-processor",
+        type=TrackProcessors.from_str,
+        required=True,
+        choices=list(TrackProcessors),
+        help="Track processor type.",
+    )
+    track_processor_group.add_argument(
+        "--track-processor-pianoroll-resolution",
         type=int,
-        default=1,
-        help="Number of measures to use.",
+        default=30,
+        help=f"Pianoroll resolution in steps per second (only for {TrackProcessors.pianoroll}).",
     )
-    hp_group.add_argument(
-        "--hp-measures-overlap",
-        type=bool_from_str,
-        help="Whether to use overlapping measures.",
-        default=False,
+
+    # Models group
+    models_group = parser.add_argument_group("Models")
+    models_group.add_argument(
+        "--model",
+        type=GenreClassifierType.from_str,
+        required=True,
+        choices=list(GenreClassifierType),
+        help="Genre classifier type.",
     )
-    hp_group.add_argument(
-        "--hp-imfw",
-        type=bool_from_str,
-        help="Whether to use the IMFW dataset.",
-        default=False,
+    # LSTM
+    models_group.add_argument(
+        "--model-lstm-hidden-size",
+        type=int,
+        default=32,
+        help="Number of hidden units in the LSTM layer.",
     )
-    hp_group.add_argument(
-        "--hp-use-tempo",
-        type=bool_from_str,
-        help="Whether to use the tempo.",
-        default=True,
-    )
-    hp_group.add_argument(
-        "--hp-use-augmented-dataset",
-        type=bool_from_str,
-        help="Whether to use the augmented dataset.",
-        default=True,
-    )
-    hp_group.add_argument(
-        "--hp-num-augmentations",
+    models_group.add_argument(
+        "--model-lstm-num-layers",
         type=int,
         default=2,
-        help="Number of augmentations to use.",
+        help="Number of layers in the LSTM layer.",
+    )
+    # Transformer
+    models_group.add_argument(
+        "--model-transformer-num-heads",
+        type=int,
+        default=4,
+        help="Number of heads in the transformer.",
+    )
+    models_group.add_argument(
+        "--model-transformer-feedforward-dim",
+        type=int,
+        default=128,
+        help="Feedforward dimension in the transformer.",
+    )
+    models_group.add_argument(
+        "--model-transformer-num-layers",
+        type=int,
+        default=2,
+        help="Number of layers in the transformer.",
+    )
+    models_group.add_argument(
+        "--model-dropout-rate",
+        type=float,
+        default=0.3,
+        help="Dropout rate.",
+    )
+
+    # Data augmentation group
+    augmentation_group = parser.add_argument_group("Hyperparameters")
+    augmentation_group.add_argument(
+        "--num-measures-per-chunk",
+        type=int,
+        default=1,
+        help="Number of measures to use in each chunk.",
+    )
+    augmentation_group.add_argument(
+        "--chunk-overlap",
+        type=bool_from_str,
+        help="Whether to use overlapping chunks.",
+        default=False,
+    )
+    augmentation_group.add_argument(
+        "--num-augmentations",
+        type=int,
+        default=0,
+        help="Number of augmentations to use (0 for none).",
     )
 
     # Others group
@@ -192,6 +209,18 @@ def parse_args() -> ScriptParameters:
         default=30,
         help="Minimum number of tracks per label.",
     )
+    augmentation_group.add_argument(
+        "--use-imfw",
+        type=bool_from_str,
+        help="Whether to weight the loss with the inverse median frequency of classes.",
+        default=False,
+    )
+    augmentation_group.add_argument(
+        "--use-tempo",
+        type=bool_from_str,
+        help="Whether let the model access the tempo.",
+        default=True,
+    )
 
     args = parser.parse_args()
 
@@ -199,23 +228,26 @@ def parse_args() -> ScriptParameters:
         data_path=args.data_path,
         processed_data_path=args.processed_data_path,
         results_path=args.results_path,
-        track_processor_type=args.track_processor,
-        track_processor_pianoroll_resolution=args.track_processor_pianoroll_resolution,
         training_batch_size=args.training_batch_size,
         training_num_epochs=args.training_num_epochs,
         training_patience=args.training_patience,
-        hp_lstm_hidden_size=args.hp_lstm_hidden_size,
-        hp_lstm_num_layers=args.hp_lstm_num_layers,
-        hp_dropout_rate=args.hp_dropout_rate,
-        hp_lr=args.hp_lr,
-        hp_reg=args.hp_reg,
-        hp_num_measures=args.hp_num_measures,
-        hp_measures_overlap=args.hp_measures_overlap,
-        hp_imfw=args.hp_imfw,
-        hp_use_tempo=args.hp_use_tempo,
-        hp_use_augmented_dataset=args.hp_use_augmented_dataset,
-        hp_num_augmentations=args.hp_num_augmentations,
+        training_learning_rate=args.training_learning_rate,
+        training_l2_regularization=args.training_l2_regularization,
+        track_processor_type=args.track_processor,
+        track_processor_pianoroll_resolution=args.track_processor_pianoroll_resolution,
+        model_type=args.model,
+        model_lstm_hidden_size=args.model_lstm_hidden_size,
+        model_lstm_num_layers=args.model_lstm_num_layers,
+        model_transformer_num_heads=args.model_transformer_num_heads,
+        model_transformer_feedforward_dim=args.model_transformer_feedforward_dim,
+        model_transformer_num_layers=args.model_transformer_num_layers,
+        model_dropout_rate=args.model_dropout_rate,
+        num_measures_per_chunk=args.num_measures_per_chunk,
+        chunk_overlap=args.chunk_overlap,
+        num_augmentations=args.num_augmentations,
         min_tracks_per_label=args.min_tracks_per_label,
+        use_imfw=args.use_imfw,
+        use_tempo=args.use_tempo,
     )
 
     return script_params

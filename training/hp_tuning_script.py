@@ -13,6 +13,7 @@ import yaml
 
 from cli.parser import ScriptParameters
 from data_processing.track_processors import TrackProcessors
+from models.genre_classifier import GenreClassifierType
 from training.training_script import main
 
 
@@ -52,19 +53,22 @@ if __name__ == "__main__":
     HYPERPARAMETERS = [
         HyperParameter("TrackProcessorType", ["multivariate", "pianoroll"]),
         HyperParameter("TrackProcessorPianorollResolution", [30]),
-        HyperParameter("LstmHiddenSize", [8, 16, 32, 64, 96, 128]),
+        HyperParameter("Model", ["lstm", "transformer"]),
+        HyperParameter("LstmHiddenSize", [8, 16, 32]),  # , 64, 96, 128]),
         HyperParameter("LstmNumLayers", [1, 2, 3]),
-        HyperParameter("DropoutRate", [0.1, 0.3, 0.5]),
+        HyperParameter("TransformerNumHeads", [2, 4, 8]),
+        HyperParameter("TransformerFFDim", [8, 16, 32]),
+        HyperParameter("TransformerNumLayers", [1, 2, 3]),
+        HyperParameter("DropoutRate", [0.3, 0.5]),
         # HyperParameter('DropoutRate', [0.5]),
         # HyperParameter('lr', np.logspace(-4, -2, 3).tolist()),
-        HyperParameter("lr", [1e-3]),
+        HyperParameter("LearningRate", [1e-3]),
         # HyperParameter('reg', np.logspace(-4, -2, 3).tolist()),
-        HyperParameter("reg", [1e-4, 5e-4]),
+        HyperParameter("L2Regularization", [1e-4, 5e-4]),
         HyperParameter("NumMeasures", [1, 2, 4, 8]),
         HyperParameter("MeasuresOverlap", [True, False]),
         HyperParameter("IMFW", [True, False]),
         HyperParameter("UseTempo", [True, False]),
-        HyperParameter("UseAugmentedDataset", [True, False]),
         HyperParameter("NumAugmentations", [0, 2, 5, 10]),
     ]
 
@@ -74,15 +78,25 @@ if __name__ == "__main__":
     )  # See https://stackoverflow.com/questions/5228158/cartesian-product-of-a-dictionary-of-lists/40623158
 
     def is_valid(hps: dict) -> bool:
-        if hps["UseAugmentedDataset"] and hps["NumAugmentations"] == 0:
-            return False
-        if not hps["UseAugmentedDataset"] and hps["NumAugmentations"] != 0:
-            return False
         if (
             not hps["TrackProcessorType"] == "pianoroll"
             and hps["TrackProcessorPianorollResolution"] != 30
         ):
             return False
+        if hps["Model"] == "lstm":
+            if hps["TransformerNumHeads"] != 4:
+                return False
+            if hps["TransformerFFDim"] != 32:
+                return False
+            if hps["TransformerNumLayers"] != 2:
+                return False
+        elif hps["Model"] == "transformer":
+            if hps["LstmHiddenSize"] != 8:
+                return False
+            if hps["LstmNumLayers"] != 2:
+                return False
+        else:
+            raise ValueError(f"Unknown model: {hps['Model']}")
         return True
 
     domain = list(filter(is_valid, domain))
@@ -98,23 +112,26 @@ if __name__ == "__main__":
             data_path=args.data_path,
             processed_data_path=args.processed_data_path,
             results_path=args.results_path,
-            track_processor_type=TrackProcessors.from_str(hparams["TrackProcessorType"]),
-            track_processor_pianoroll_resolution=hparams["TrackProcessorPianorollResolution"],
             training_batch_size=64,
             training_num_epochs=2,
             training_patience=40,
-            hp_use_tempo=hparams["UseTempo"],
-            hp_num_measures=hparams["NumMeasures"],
-            hp_measures_overlap=hparams["MeasuresOverlap"],
-            hp_imfw=hparams["IMFW"],
-            hp_use_augmented_dataset=hparams["UseAugmentedDataset"],
-            hp_num_augmentations=hparams["NumAugmentations"],
-            hp_lstm_hidden_size=hparams["LstmHiddenSize"],
-            hp_lstm_num_layers=hparams["LstmNumLayers"],
-            hp_dropout_rate=hparams["DropoutRate"],
-            hp_lr=hparams["lr"],
-            hp_reg=hparams["reg"],
-            min_tracks_per_label=20,
+            training_learning_rate=hparams["LearningRate"],
+            training_l2_regularization=hparams["L2Regularization"],
+            track_processor_type=TrackProcessors.from_str(hparams["TrackProcessorType"]),
+            track_processor_pianoroll_resolution=hparams["TrackProcessorPianorollResolution"],
+            model_type=GenreClassifierType.from_str("lstm"),
+            model_lstm_hidden_size=hparams["LstmHiddenSize"],
+            model_lstm_num_layers=hparams["LstmNumLayers"],
+            model_transformer_num_heads=hparams["TransformerNumHeads"],
+            model_transformer_feedforward_dim=hparams["TransformerFFDim"],
+            model_transformer_num_layers=hparams["TransformerNumLayers"],
+            model_dropout_rate=hparams["DropoutRate"],
+            num_measures_per_chunk=hparams["NumMeasures"],
+            chunk_overlap=hparams["MeasuresOverlap"],
+            num_augmentations=hparams["NumAugmentations"],
+            min_tracks_per_label=10,
+            use_imfw=hparams["IMFW"],
+            use_tempo=hparams["UseTempo"],
         )
         print("=" * 80)
         print(f"Run {i + 1}/{len(domain)}")
