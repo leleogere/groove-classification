@@ -7,7 +7,6 @@ import torch
 from torch import nn
 from torchmetrics.classification import MulticlassF1Score
 
-from models.transformers_old import TransformerEncoder
 from models.utils import TupleExtractor
 from utils.confusion_matrix import confusion_matrix_pipeline
 
