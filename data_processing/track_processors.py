@@ -136,9 +136,10 @@ class RelativeMultivariateTrackProcessor(TrackProcessor):
             note_attributes["id"].append(self.drums.pitch_to_id[note.pitch])
 
         vector_components = [
-            # 22 first components are the one-hot encoding of the drum id
+            # the 22 first components are the one-hot encoding of the drum id
             torch.nn.functional.one_hot(
-                torch.tensor(note_attributes["id"]), num_classes=len(self.drums)
+                torch.tensor(note_attributes["id"]),
+                num_classes=len(self.drums),
             ).float(),
             # the 3 others are the normalized velocity, duration and timeshift
             *[
