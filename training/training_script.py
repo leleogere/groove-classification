@@ -2,14 +2,13 @@ from datetime import datetime
 from pathlib import Path
 
 import lightning as L
-import lightning.pytorch as pl
+from lightning.pytorch import loggers as loggers, callbacks as callbacks
 import torch
 
 from cli.parser import ScriptParameters
 from cli.parser import parse_args
 from data_processing.track_processors import TrackProcessor
 from dataset.groove_dataset import GrooveMidiModule
-from models.genre_classifier import GenreClassifier, GenreClassifierLSTM, GenreClassifierTransformer
 
 
 def main(params: ScriptParameters):
@@ -98,14 +97,14 @@ def main(params: ScriptParameters):
     )
 
     # Prepare callbacks
-    early_stopping = pl.callbacks.EarlyStopping(
+    early_stopping = callbacks.EarlyStopping(
         monitor="val/loss",
         min_delta=0.00,
         patience=params.training_patience,
         mode="min",
     )
     params.results_path.mkdir(parents=True, exist_ok=True)
-    logger = pl.loggers.TensorBoardLogger(
+    logger = loggers.TensorBoardLogger(
         save_dir=params.results_path,
         name=datetime.now().strftime("%Y-%m-%d"),
         default_hp_metric=False,
