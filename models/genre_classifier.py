@@ -186,6 +186,7 @@ class GenreClassifierTransformer(GenreClassifier):
         self,
         input_dim: int,
         num_heads: int,
+        num_features_per_head: int,
         feedforward_dim: int,
         num_layers: int,
         num_classes: int,
@@ -197,24 +198,22 @@ class GenreClassifierTransformer(GenreClassifier):
         loss_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = nn.CrossEntropyLoss(),
         hparams_to_log: dict = None,
     ):
-        # Padding necessary as transformer expects d_model to be divisible by nhead
-        padding_to_add = num_heads - input_dim % num_heads
-        padder = nn.ZeroPad1d(padding=(0, padding_to_add))
-        new_input_dim = input_dim + padding_to_add
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=new_input_dim,
-            nhead=num_heads,
-            dim_feedforward=feedforward_dim,
-            dropout=dropout_rate,
-        )
+        # torch need embed_dim % nheads == 0, so we add a linear layer to adjust the input dimension
+        encoder_input_dim = num_heads * num_features_per_head
+        linear = nn.Linear(input_dim, encoder_input_dim)
         encoder = nn.TransformerEncoder(
-            encoder_layer=encoder_layer,
+            encoder_layer=nn.TransformerEncoderLayer(
+                d_model=encoder_input_dim,
+                nhead=num_heads,
+                dim_feedforward=feedforward_dim,
+                dropout=dropout_rate,
+            ),
             num_layers=num_layers,
         )
-        module = nn.Sequential(padder, encoder)
+        module = nn.Sequential(linear, encoder)
         super().__init__(
             base_module=module,
-            base_module_output_dim=new_input_dim,
+            base_module_output_dim=encoder_input_dim,
             num_classes=num_classes,
             dropout_rate=dropout_rate,
             lr=lr,

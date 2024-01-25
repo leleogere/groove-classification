@@ -57,6 +57,7 @@ if __name__ == "__main__":
         HyperParameter("LstmHiddenSize", [8, 16, 32]),  # , 64, 96, 128]),
         HyperParameter("LstmNumLayers", [1, 2, 3]),
         HyperParameter("TransformerNumHeads", [2, 4, 8]),
+        HyperParameter("TransformerNumFeaturesPerHead", [2, 4, 8, 16, 32]),
         HyperParameter("TransformerFFDim", [8, 16, 32]),
         HyperParameter("TransformerNumLayers", [1, 2, 3]),
         HyperParameter("DropoutRate", [0.3, 0.5]),
@@ -85,6 +86,8 @@ if __name__ == "__main__":
             return False
         if hps["Model"] == "lstm":
             if hps["TransformerNumHeads"] != 4:
+                return False
+            if hps["TransformerNumFeaturesPerHead"] != 4:
                 return False
             if hps["TransformerFFDim"] != 32:
                 return False
@@ -123,6 +126,7 @@ if __name__ == "__main__":
             model_lstm_hidden_size=hparams["LstmHiddenSize"],
             model_lstm_num_layers=hparams["LstmNumLayers"],
             model_transformer_num_heads=hparams["TransformerNumHeads"],
+            model_transformer_num_features_per_head=hparams["TransformerNumFeaturesPerHead"],
             model_transformer_feedforward_dim=hparams["TransformerFFDim"],
             model_transformer_num_layers=hparams["TransformerNumLayers"],
             model_dropout_rate=hparams["DropoutRate"],

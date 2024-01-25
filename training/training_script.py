@@ -78,6 +78,7 @@ def main(params: ScriptParameters):
     elif params.model_type.name == "transformer":
         model_specific_params = {
             "num_heads": params.model_transformer_num_heads,
+            "num_features_per_head": params.model_transformer_num_features_per_head,
             "feedforward_dim": params.model_transformer_feedforward_dim,
             "num_layers": params.model_transformer_num_layers,
         }
