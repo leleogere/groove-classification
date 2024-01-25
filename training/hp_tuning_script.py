@@ -122,7 +122,7 @@ if __name__ == "__main__":
             training_l2_regularization=hparams["L2Regularization"],
             track_processor_type=TrackProcessors.from_str(hparams["TrackProcessorType"]),
             track_processor_pianoroll_resolution=hparams["TrackProcessorPianorollResolution"],
-            model_type=GenreClassifierType.from_str("lstm"),
+            model_type=GenreClassifierType.from_str(hparams["Model"]),
             model_lstm_hidden_size=hparams["LstmHiddenSize"],
             model_lstm_num_layers=hparams["LstmNumLayers"],
             model_transformer_num_heads=hparams["TransformerNumHeads"],
