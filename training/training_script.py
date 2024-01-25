@@ -111,7 +111,7 @@ def main(params: ScriptParameters):
     except KeyError:
         raise KeyError("Please set the WANDB_PROJECT environment variable to your project name")
     logger = loggers.WandbLogger(
-        save_dir=str(params.results_path / "wandb"),
+        save_dir=str(params.results_path),
         project=project,
         log_model=True,
     )
