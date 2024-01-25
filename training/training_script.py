@@ -130,6 +130,8 @@ def main(params: ScriptParameters):
     )
     trainer.fit(model, datamodule=groove_module)
 
+    logger.experiment.finish()
+
     groove_module.memory.reduce_size(bytes_limit="100G")  # TODO: make this configurable
 
 
