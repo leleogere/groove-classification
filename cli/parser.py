@@ -26,6 +26,7 @@ class ScriptParameters:
     model_lstm_hidden_size: int
     model_lstm_num_layers: int
     model_transformer_num_heads: int
+    model_transformer_num_features_per_head: int
     model_transformer_feedforward_dim: int
     model_transformer_num_layers: int
     model_dropout_rate: float
@@ -162,6 +163,12 @@ def parse_args() -> ScriptParameters:
         help="Number of heads in the transformer.",
     )
     models_group.add_argument(
+        "--model-transformer-num-features-per-head",
+        type=int,
+        default=4,
+        help="Number of features per head in the transformer.",
+    )
+    models_group.add_argument(
         "--model-transformer-feedforward-dim",
         type=int,
         default=128,
@@ -239,6 +246,7 @@ def parse_args() -> ScriptParameters:
         model_lstm_hidden_size=args.model_lstm_hidden_size,
         model_lstm_num_layers=args.model_lstm_num_layers,
         model_transformer_num_heads=args.model_transformer_num_heads,
+        model_transformer_num_features_per_head=args.model_transformer_num_features_per_head,
         model_transformer_feedforward_dim=args.model_transformer_feedforward_dim,
         model_transformer_num_layers=args.model_transformer_num_layers,
         model_dropout_rate=args.model_dropout_rate,
