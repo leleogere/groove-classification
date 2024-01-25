@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -105,14 +106,19 @@ def main(params: ScriptParameters):
         mode="min",
     )
     params.results_path.mkdir(parents=True, exist_ok=True)
-    logger = loggers.TensorBoardLogger(
-        save_dir=params.results_path,
-        name=datetime.now().strftime("%Y-%m-%d"),
-        default_hp_metric=False,
+    try:
+        project = os.environ["WANDB_PROJECT"]
+    except KeyError:
+        raise KeyError("Please set the WANDB_PROJECT environment variable to your project name")
+    logger = loggers.WandbLogger(
+        save_dir=str(params.results_path / "wandb"),
+        project=project,
+        log_model=True,
     )
-    logger_dir = Path(logger.log_dir)
-    logger_dir.mkdir(parents=True, exist_ok=False)
-    groove_module.export_label_infos(logger_dir / "label_infos.txt")
+    # logger_dir = Path(logger.save_dir)
+    # logger_dir.mkdir(parents=True, exist_ok=False)
+    # groove_module.export_label_infos(logger_dir / "label_infos.txt")
+    logger.log_text("label_infos", columns=[groove_module.label_infos_to_string()])
 
     # Train model
     print("Training model...")

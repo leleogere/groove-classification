@@ -111,8 +111,8 @@ class GenreClassifier(L.LightningModule):
             y_pred.cpu(),
             self.class_names,
             normalization="true",
-        ).transpose((2, 0, 1))
-        self.logger.experiment.add_image(f"{key}_confusion_matrix", image, self.current_epoch)
+        )  # .transpose((2, 0, 1))
+        self.logger.log_image(f"{key}_confusion_matrix", [image], self.current_epoch)
         # Reset accumulated predictions
         self._reset_accumulated_predictions(key)
 
@@ -128,7 +128,7 @@ class GenreClassifier(L.LightningModule):
         for part in ["train", "val"]:
             to_log.update({f"{part}/{k}": float("NaN") for k in self.metrics.keys()})
             to_log.update({f"{part}/loss": float("NaN")})
-        self.logger.log_hyperparams(self.hparams, metrics=to_log)
+        self.logger.log_hyperparams(self.hparams)
 
     def _reset_accumulated_predictions(self, key: str | None = None):
         def default_dict():

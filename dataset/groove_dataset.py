@@ -342,7 +342,7 @@ class GrooveMidiModule(L.LightningDataModule):
             num_workers=self.num_workers,
         )
 
-    def export_label_infos(self, path: Path, tablefmt: str = "rounded_outline") -> None:
+    def label_infos_to_string(self, tablefmt: str = "rounded_outline") -> str:
         def unique_list(it: Iterable):
             return list(dict.fromkeys(it))
 
@@ -357,16 +357,21 @@ class GrooveMidiModule(L.LightningDataModule):
             for field in infos[label][splits[0]]:
                 infos[label]["total"][field] = sum(infos[label][split][field] for split in splits)
         splits.insert(0, "total")
+
+        result = ""
+        for split in splits:
+            result += f"{split}\n"
+            table = []
+            for label in labels:
+                table.append([label] + [infos[label][split][field] for field in fields])
+            result += tabulate.tabulate(table, headers=["label"] + list(fields), tablefmt=tablefmt)
+            result += "\n\n"
+
+        return result
+
+    def export_label_infos(self, path: Path, tablefmt: str = "rounded_outline") -> None:
         with open(path, "w") as f:
-            for split in splits:
-                f.write(f"{split}\n")
-                table = []
-                for label in labels:
-                    table.append([label] + [infos[label][split][field] for field in fields])
-                f.write(
-                    tabulate.tabulate(table, headers=["label"] + list(fields), tablefmt=tablefmt)
-                )
-                f.write("\n\n")
+            f.write(self.label_infos_to_string(tablefmt=tablefmt))
 
 
 if __name__ == "__main__":
