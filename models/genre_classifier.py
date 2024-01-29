@@ -157,16 +157,24 @@ class GenreClassifierLSTM(GenreClassifier):
         loss_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = nn.CrossEntropyLoss(),
         hparams_to_log: dict = None,
     ):
-        lstm = nn.LSTM(
-            input_dim,
-            hidden_size,
-            num_layers=num_layers,
-            batch_first=True,
-            bidirectional=True,
-            dropout=dropout_rate,
-        )
-        element_extractor = TupleExtractor(index=0)
-        module = nn.Sequential(lstm, element_extractor)
+        class UniqueOutputLSTM(nn.Module):
+            def __init__(self, input_dim, hidden_size, num_layers, dropout_rate):
+                super().__init__()
+                self.lstm = nn.LSTM(
+                    input_dim,
+                    hidden_size,
+                    num_layers=num_layers,
+                    batch_first=True,
+                    bidirectional=True,
+                    dropout=dropout_rate,
+                )
+
+            def forward(self, x):
+                x, _ = self.lstm(x)
+                return x
+        
+        module = UniqueOutputLSTM(input_dim, hidden_size, num_layers, dropout_rate)
+
         super().__init__(
             base_module=module,
             base_module_output_dim=2 * hidden_size,
