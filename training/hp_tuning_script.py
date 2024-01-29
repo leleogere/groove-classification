@@ -77,32 +77,61 @@ if __name__ == "__main__":
         dict(zip(map(lambda hp: hp.name, HYPERPARAMETERS), x))
         for x in itertools.product(*map(lambda hp: hp.values, HYPERPARAMETERS))
     )  # See https://stackoverflow.com/questions/5228158/cartesian-product-of-a-dictionary-of-lists/40623158
+    print(f"Number of hyperparameter sets before filtering: {len(domain)}")
 
-    def is_valid(hps: dict) -> bool:
-        if (
-            not hps["TrackProcessorType"] == "pianoroll"
-            and hps["TrackProcessorPianorollResolution"] != 30
-        ):
-            return False
-        if hps["Model"] == "lstm":
-            if hps["TransformerNumHeads"] != 4:
-                return False
-            if hps["TransformerNumFeaturesPerHead"] != 4:
-                return False
-            if hps["TransformerFFDim"] != 32:
-                return False
-            if hps["TransformerNumLayers"] != 2:
-                return False
-        elif hps["Model"] == "transformer":
-            if hps["LstmHiddenSize"] != 8:
-                return False
-            if hps["LstmNumLayers"] != 2:
-                return False
-        else:
-            raise ValueError(f"Unknown model: {hps['Model']}")
-        return True
+    # def is_valid(hps: dict) -> bool:
+    #     if (
+    #         not hps["TrackProcessorType"] == "pianoroll"
+    #         and hps["TrackProcessorPianorollResolution"] != 30
+    #     ):
+    #         return False
+    #     if hps["Model"] == "lstm":
+    #         if hps["TransformerNumHeads"] != 4:
+    #             return False
+    #         if hps["TransformerNumFeaturesPerHead"] != 4:
+    #             return False
+    #         if hps["TransformerFFDim"] != 32:
+    #             return False
+    #         if hps["TransformerNumLayers"] != 2:
+    #             return False
+    #     elif hps["Model"] == "transformer":
+    #         if hps["LstmHiddenSize"] != 8:
+    #             return False
+    #         if hps["LstmNumLayers"] != 2:
+    #             return False
+    #     else:
+    #         raise ValueError(f"Unknown model: {hps['Model']}")
+    #     return True
 
-    domain = list(filter(is_valid, domain))
+    def conditional_set_none(
+        hps: dict,
+        invalid_rules: list[tuple[tuple[str, str], str]] = None,
+        inplace: bool = True,
+    ) -> dict:
+        if invalid_rules is None:
+            invalid_rules = [
+                # Pop transformer paramameters for LSTM model
+                (("Model", "lstm"), r"Transformer"),
+                # Pop LSTM paramameters for transformer model
+                (("Model", "transformer"), "Lstm"),
+                # Pop pianoroll paramameters for multivariate processor
+                (("TrackProcessorType", "multivariate"), r"TrackProcessorPianoroll"),
+            ]
+        if not inplace:
+            hps = copy.deepcopy(hps)
+        for (key_to_filter_on, value_to_filter_on), pattern_to_pop in invalid_rules:
+            if hps[key_to_filter_on] == value_to_filter_on:
+                keys_to_pop = filter(lambda key: key.startswith(pattern_to_pop), hps.keys())
+                for key_to_pop in keys_to_pop:
+                    hps[key_to_pop] = None
+        return hps
+
+    # Set to None useless hyperparameters
+    domain = [conditional_set_none(hps, inplace=True) for hps in domain]
+    # Remove duplicates (using fact that keys are unique in dict)
+    hashes = {hash(frozenset(trial.items())): trial for trial in domain}
+    domain = list(hashes.values())
+    print(f"Number of hyperparameter sets after filtering: {len(domain)}")
 
     random.seed(22)
     random.shuffle(domain)
