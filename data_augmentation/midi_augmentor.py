@@ -242,12 +242,12 @@ class MidiAugmentor:
                         current_augmented_path,
                         seed=int(seeds[i, variation]),
                     )
-                    bpm_infos[str(current_augmented_path)] = new_bpm
+                    bpm_infos[current_augmented_path.name] = new_bpm
                 if include_original_track:
                     out_file = base_path / f"{midi_path.stem}_variation=original.mid"
                     shutil.copy(midi_path, out_file)
                     augmented_file_paths[midi_path].append(out_file)
-                    bpm_infos[str(out_file)] = parse_bpm_from_file_name(midi_path.name)
+                    bpm_infos[out_file.name] = parse_bpm_from_file_name(midi_path.name)
                 pbar.update(midi_size)
                 dump_json(bpm_infos, bpm_filepath, overwrite=True, indent=4)
             except KeyboardInterrupt:

@@ -147,7 +147,7 @@ def augment_midi_dataset(
         parent = file_path.parent
         if parent not in bpm_files:
             bpm_files[parent] = load_json(parent / MidiAugmentor.bpm_filename)
-        return bpm_files[parent][str(file_path)]
+        return bpm_files[parent][file_path.name]
 
     new_tracks = [
         Track.from_partial(track, midi_path=augmented_path, bpm=get_bpm(augmented_path))
