@@ -112,7 +112,7 @@ class GenreClassifier(L.LightningModule):
             self.class_names,
             normalization="true",
         )  # .transpose((2, 0, 1))
-        self.logger.log_image(f"{key}_confusion_matrix", [image], self.current_epoch)
+        self.logger.log_image(f"{key}_confusion_matrix", images=[image], step=self.global_step)
         # Reset accumulated predictions
         self._reset_accumulated_predictions(key)
 
