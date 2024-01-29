@@ -118,7 +118,8 @@ def main(params: ScriptParameters):
     # logger_dir = Path(logger.save_dir)
     # logger_dir.mkdir(parents=True, exist_ok=False)
     # groove_module.export_label_infos(logger_dir / "label_infos.txt")
-    logger.log_text("label_infos", data=[groove_module.label_infos_to_string()])
+    print("Label infos:")
+    print(groove_module.label_infos_to_string())
 
     # Train model
     print("Training model...")
