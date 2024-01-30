@@ -74,7 +74,7 @@ def main(params: ScriptParameters):
     if params.model_type.name == "lstm":
         model_specific_params = {
             "hidden_size": params.model_lstm_hidden_size,
-            "num_layers": params.model_lstm_hidden_size,
+            "num_layers": params.model_lstm_num_layers,
         }
     elif params.model_type.name == "transformer":
         model_specific_params = {
