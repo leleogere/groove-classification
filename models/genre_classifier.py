@@ -122,13 +122,13 @@ class GenreClassifier(L.LightningModule):
     def on_validation_epoch_end(self):
         self.on_common_epoch_end(self._val_key)
 
-    def on_train_start(self) -> None:
-        # Log hyperparameters with first dummy metrics in order for them to appear in TensorBoard
-        to_log = {}
-        for part in ["train", "val"]:
-            to_log.update({f"{part}/{k}": float("NaN") for k in self.metrics.keys()})
-            to_log.update({f"{part}/loss": float("NaN")})
-        self.logger.log_hyperparams(self.hparams)
+    # def on_train_start(self) -> None:
+    #     # Log hyperparameters with first dummy metrics in order for them to appear in TensorBoard
+    #     to_log = {}
+    #     for part in ["train", "val"]:
+    #         to_log.update({f"{part}/{k}": float("NaN") for k in self.metrics.keys()})
+    #         to_log.update({f"{part}/loss": float("NaN")})
+    #     self.logger.log_hyperparams(self.hparams)
 
     def _reset_accumulated_predictions(self, key: str | None = None):
         def default_dict():
