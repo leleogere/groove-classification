@@ -89,7 +89,7 @@ class MidiAugmentor:
         """
         Split a MIDI file into bars.
         :param path: Path to the MIDI file.
-        :param out_path: Output directory. All chunks will be written in that directory.
+        :param out_path: Output file path.  # TODO: change function so self.num_variations_per_track is used
         :param seed: Seed for the random number generator.
         :return: Tempo of the new MIDI file.
         :todo: What if a note starts before the chunk but ends after the chunk?
