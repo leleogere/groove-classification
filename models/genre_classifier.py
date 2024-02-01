@@ -160,22 +160,33 @@ class GenreClassifierLSTM(GenreClassifier):
         bidirectional = True
 
         class UniqueOutputLSTM(nn.Module):
-            def __init__(self, input_dim, hidden_size, num_layers, dropout_rate):
+            def __init__(
+                self,
+                input_dim_: int,
+                hidden_size_: int,
+                num_layers_: int,
+                dropout_rate_: float,
+            ):
                 super().__init__()
                 self.lstm = nn.LSTM(
-                    input_dim,
-                    hidden_size,
-                    num_layers=num_layers,
+                    input_dim_,
+                    hidden_size_,
+                    num_layers=num_layers_,
                     batch_first=True,
                     bidirectional=bidirectional,
-                    dropout=dropout_rate,
+                    dropout=dropout_rate_,
                 )
 
             def forward(self, x):
                 x, _ = self.lstm(x)
                 return x
-        
-        module = UniqueOutputLSTM(input_dim, hidden_size, num_layers, dropout_rate)
+
+        module = UniqueOutputLSTM(
+            input_dim_=input_dim,
+            hidden_size_=hidden_size,
+            num_layers_=num_layers,
+            dropout_rate_=dropout_rate,
+        )
 
         super().__init__(
             base_module=module,
