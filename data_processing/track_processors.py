@@ -2,7 +2,6 @@ from collections import defaultdict
 from enum import Enum
 
 import torch
-from torch import LongTensor
 from torch import nn
 
 from utils.classes import ProcessedTrack
