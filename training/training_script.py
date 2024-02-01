@@ -8,7 +8,7 @@ import torch
 
 from cli.parser import ScriptParameters
 from cli.parser import parse_args
-from data_processing.track_processors import TrackProcessor
+from data_processing.track_processors_base import TrackProcessor
 from dataset.groove_dataset import GrooveMidiModule
 
 

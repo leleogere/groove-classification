@@ -12,7 +12,7 @@ import torch
 import yaml
 
 from cli.parser import ScriptParameters
-from data_processing.track_processors import TrackProcessors
+from data_processing.track_processor_enum import TrackProcessors
 from models.genre_classifier import GenreClassifierType
 from training.training_script import main
 

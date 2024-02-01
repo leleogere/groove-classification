@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from pprint import pformat
 
-from data_processing.track_processors import TrackProcessors
+from data_processing.track_processor_enum import TrackProcessors
 from models.genre_classifier import GenreClassifierType
 
 

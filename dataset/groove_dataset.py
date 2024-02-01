@@ -16,8 +16,8 @@ from torch.utils.data import Dataset
 
 from data_augmentation.midi_augmentor import MidiAugmentor
 from data_augmentation.midi_splitter import Splitter
-from data_processing.track_processors import RelativeMultivariateTrackProcessor
-from data_processing.track_processors import TrackProcessor
+from data_processing.track_processor_relative import RelativeMultivariateTrackProcessor
+from data_processing.track_processors_base import TrackProcessor
 from utils.classes import Track
 from utils.constants import DRUMS
 from utils.utils import load_json

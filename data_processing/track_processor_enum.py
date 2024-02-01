@@ -1,0 +1,21 @@
+from enum import Enum
+
+from data_processing.track_processor_multivariate import PianoRollTrackProcessor
+from data_processing.track_processor_relative import RelativeMultivariateTrackProcessor
+
+
+class TrackProcessors(Enum):
+    multivariate = RelativeMultivariateTrackProcessor
+    pianoroll = PianoRollTrackProcessor
+
+    def __str__(self):
+        return self.name
+
+    @staticmethod
+    def from_str(s: str):
+        try:
+            return TrackProcessors[s]
+        except KeyError:
+            raise ValueError(
+                f"Cannot convert {s} to TrackProcessors. Valid values are {list(TrackProcessors)}."
+            )
