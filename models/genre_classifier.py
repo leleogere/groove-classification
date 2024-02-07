@@ -222,6 +222,7 @@ class GenreClassifierTransformer(GenreClassifier):
         # torch need embed_dim % nheads == 0, so we add a linear layer to adjust the input dimension
         encoder_input_dim = num_heads * num_features_per_head
         linear = nn.Linear(input_dim, encoder_input_dim)
+        relu = nn.ReLU()
         encoder = nn.TransformerEncoder(
             encoder_layer=nn.TransformerEncoderLayer(
                 d_model=encoder_input_dim,
@@ -232,7 +233,7 @@ class GenreClassifierTransformer(GenreClassifier):
             ),
             num_layers=num_layers,
         )
-        module = nn.Sequential(linear, encoder)
+        module = nn.Sequential(linear, relu, encoder)
         super().__init__(
             base_module=module,
             base_module_output_dim=encoder_input_dim,
