@@ -228,6 +228,7 @@ class GenreClassifierTransformer(GenreClassifier):
                 nhead=num_heads,
                 dim_feedforward=feedforward_dim,
                 dropout=dropout_rate,
+                batch_first=True,
             ),
             num_layers=num_layers,
         )
