@@ -78,6 +78,7 @@ class GrooveMidiDataset(TrackDataset):
                     midi_path=self.path.absolute() / row["midi_filename"],
                     label=process_label(row["style"]),
                     bpm=float(row["bpm"]),
+                    time_signature=tuple(map(int, row["time_signature"].split("-"))),
                     split=row["split"],
                 )
                 for row in self._metadata

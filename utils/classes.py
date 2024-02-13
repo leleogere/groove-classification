@@ -83,12 +83,14 @@ class Track:
         midi_path: Path,
         label: str = None,
         bpm: float = None,
+        time_signature: tuple[int, int] = None,
         split: str = None,
         label_idx: int = None,
     ):
         self.midi_path = midi_path
         self.label = label
         self.bpm = bpm
+        self.time_signature = time_signature
         self.split = split
         self.label_idx = label_idx
 
