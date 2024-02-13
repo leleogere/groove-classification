@@ -4,6 +4,7 @@ import shutil
 from collections import defaultdict
 from pathlib import Path
 
+import mido
 import numpy as np
 from scipy import stats
 from tqdm import tqdm
@@ -39,7 +40,10 @@ def truncated_normal(
     :param size: Number of samples to draw.
     :return: Samples from the truncated normal distribution.
     """
-    x = stats.truncnorm((a - mean) / std, (b - mean) / std, loc=mean, scale=std).rvs(size=size)
+    if std == 0:
+        x = np.full(size, mean)
+    else:
+        x = stats.truncnorm((a - mean) / std, (b - mean) / std, loc=mean, scale=std).rvs(size=size)
     return x[0] if size == 1 else x
 
 
@@ -80,14 +84,14 @@ class MidiAugmentor:
         self._global_velocity_shape_force = _global_velocity_shape_force
         self.seed = seed
 
-    def augment_midi_file(
+    def single_augmentation(
         self,
         path: Path,
         out_path: Path,
         seed: int | None = None,
     ) -> float:
         """
-        Split a MIDI file into bars.
+        Augment a MIDI file by adding noise to the note events and playing on tempo.
         :param path: Path to the MIDI file.
         :param out_path: Output file path.  # TODO: change function so self.num_variations_per_track is used
         :param seed: Seed for the random number generator.
@@ -118,7 +122,7 @@ class MidiAugmentor:
         std_error_time_shift = truncated_normal(
             *self.trunc_gaussian_parameters_for_std_error_shift, a=0, b=np.inf
         )
-        tempo_variation = np.random.normal(*self.gaussian_parameters_for_tempo_variation)
+        tempo_variation = int(np.random.normal(*self.gaussian_parameters_for_tempo_variation))
 
         # Create new midi
         new_midi = copy.deepcopy(midi)
@@ -161,7 +165,78 @@ class MidiAugmentor:
 
         # Write midi
         new_midi.write(str(out_path))
+        # Merge tracks into one (needed for grammar functions)
+        # TODO: study if completely switching to mido makes sense?
+        mido_midi = mido.MidiFile(str(out_path))
+        merged_tracks = mido.merge_tracks(mido_midi.tracks)
+        mido_midi.tracks = [merged_tracks]
+        mido_midi.save(str(out_path))
         return bpm
+
+    def augment_midi_file(
+        self,
+        path: Path,
+        out_dir: Path,
+        num_augmentations: int = None,
+        only_if_doesnt_exist: bool = False,
+        include_original_track: bool = True,
+        seed: int | None = None,
+    ) -> dict[Path, list[Path]]:
+        """
+        Augment a MIDI file by adding noise to the note events and playing on tempo.
+        :param path: Path to the MIDI file.
+        :param out_dir: Output file path.
+        :param num_augmentations: Number of augmentations to generate.
+        :param only_if_doesnt_exist: Whether to skip files that already have an associated output directory (it doesn't
+            mean that the chunks have already been computed, an error could have occurred during the previous process).
+        :param include_original_track: Whether to include the original track in the output.
+        :param seed: Seed for the random number generator.
+        :return: A dictionary mapping each MIDI path to its variations.
+        """
+        if num_augmentations is None:
+            num_augmentations = self.num_variations_per_track
+        if seed is None:
+            seed = self.seed
+        np.random.seed(seed)
+        seeds = np.random.randint(0, 2**32 - 1, num_augmentations)
+
+        augmented_file_paths = defaultdict(list)
+        bpm_filepath = out_dir / self.bpm_filename
+        if bpm_filepath.exists():
+            try:
+                bpm_infos = load_json(bpm_filepath)
+            except json.decoder.JSONDecodeError:
+                print(
+                    f"Error while loading {path} variations. Deleting the directory and restarting."
+                )
+                bpm_infos = {}
+                shutil.rmtree(out_dir)
+        else:
+            bpm_infos = {}
+        try:
+            for variation in range(num_augmentations):
+                current_augmented_path = out_dir / f"{path.stem}_variation={variation}.mid"
+                augmented_file_paths[path].append(current_augmented_path)
+                if only_if_doesnt_exist and current_augmented_path.exists():
+                    continue
+                current_augmented_path.parent.mkdir(parents=True, exist_ok=True)
+                new_bpm = self.single_augmentation(
+                    path,
+                    current_augmented_path,
+                    seed=int(seeds[variation]),
+                )
+                bpm_infos[current_augmented_path.name] = new_bpm
+            if include_original_track:
+                out_file = out_dir / f"{path.stem}_variation=original.mid"
+                shutil.copy(path, out_file)
+                augmented_file_paths[path].append(out_file)
+                bpm_infos[out_file.name] = parse_bpm_from_file_name(path.name)
+            dump_json(bpm_infos, bpm_filepath, overwrite=True, indent=4)
+        except KeyboardInterrupt:
+            dump_json(bpm_infos, bpm_filepath, overwrite=True, indent=4)
+            print(f"KeyboardInterrupt: BPM of current augmentations were saved in {bpm_filepath}")
+            raise
+        return augmented_file_paths
 
     def augment_midi_dataset(
         self,
@@ -204,7 +279,7 @@ class MidiAugmentor:
             root_path = dataset
         else:
             raise TypeError(f"dataset must be a Path or a list of Tracks, not {type(dataset)}")
-        seeds = np.random.randint(0, 2**32 - 1, (len(midi_paths), num_variations_per_track))
+        seeds = np.random.randint(0, 2**32 - 1, len(midi_paths))
         pbar = tqdm(
             midi_paths,
             desc=f"Augmenting MIDI files into {num_variations_per_track} variations each",
@@ -215,54 +290,22 @@ class MidiAugmentor:
         )
         for i, (midi_path, midi_size) in enumerate(zip(midi_paths, midi_sizes)):
             base_path = out_path / midi_path.relative_to(root_path).with_suffix("")
-            bpm_filepath = base_path / self.bpm_filename
-            if bpm_filepath.exists():
-                try:
-                    bpm_infos = load_json(bpm_filepath)
-                except json.decoder.JSONDecodeError:
-                    print(
-                        f"Error while loading {midi_path} variations. Deleting the directory and"
-                        " restarting."
-                    )
-                    bpm_infos = {}
-                    shutil.rmtree(base_path)
-            else:
-                bpm_infos = {}
-            try:
-                for variation in range(num_variations_per_track):
-                    current_augmented_path = (
-                        base_path / f"{midi_path.stem}_variation={variation}.mid"
-                    )
-                    augmented_file_paths[midi_path].append(current_augmented_path)
-                    if only_if_doesnt_exist and current_augmented_path.exists():
-                        continue
-                    current_augmented_path.parent.mkdir(parents=True, exist_ok=True)
-                    new_bpm = self.augment_midi_file(
-                        midi_path,
-                        current_augmented_path,
-                        seed=int(seeds[i, variation]),
-                    )
-                    bpm_infos[current_augmented_path.name] = new_bpm
-                if include_original_track:
-                    out_file = base_path / f"{midi_path.stem}_variation=original.mid"
-                    shutil.copy(midi_path, out_file)
-                    augmented_file_paths[midi_path].append(out_file)
-                    bpm_infos[out_file.name] = parse_bpm_from_file_name(midi_path.name)
-                pbar.update(midi_size)
-                dump_json(bpm_infos, bpm_filepath, overwrite=True, indent=4)
-            except KeyboardInterrupt:
-                pbar.close()
-                dump_json(bpm_infos, bpm_filepath, overwrite=True, indent=4)
-                print(
-                    f"KeyboardInterrupt: BPM of current augmentations were saved in {bpm_filepath}"
-                )
-                raise
+            current_augmented_paths = self.augment_midi_file(
+                path=midi_path,
+                out_dir=base_path,
+                num_augmentations=num_variations_per_track,
+                only_if_doesnt_exist=only_if_doesnt_exist,
+                include_original_track=include_original_track,
+                seed=seeds[i],
+            )
+            for midi_path, augmented_paths in current_augmented_paths.items():
+                augmented_file_paths[midi_path] += augmented_paths
         pbar.close()
         return augmented_file_paths
 
 
 if __name__ == "__main__":
-    test_midi_path = Path("data/groove/drummer1/eval_session/1_funk-groove1_138_beat_4-4.mid")
+    test_midi_path = Path("../groove_data/groove/drummer1/session1/1_funk_80_beat_4-4.mid")
     # test_midi_path = Path('data/groove_augmented/drummer5/session1/8_latin-venezuelan-merengue_162_beat_5-8/8_latin-venezuelan-merengue_162_beat_5-8_variation=7.mid')
     # test_midi_path = Path('data/groove/drummer10/session1/1_jazz-swing_124_beat_4-4.mid')
     # test_midi_path = Path('groove_light/drummer1/eval_session/4_soul-groove4_80_beat_4-4.mid')
@@ -270,8 +313,17 @@ if __name__ == "__main__":
     # test_midi_path = Path('groove/drummer2/session3/1_rock-shuffle_85_beat_4-4.mid')
     # test_midi_path = Path('groove/drummer1/session2/111_rock-prog_110_beat_5-4.mid')
     augmentor = MidiAugmentor(
-        num_variations_per_track=5, gaussian_parameters_for_tempo_variation=(0, 30)
+        num_variations_per_track=5,
+        trunc_gaussian_parameters_for_std_time_shift=(0.01, 0.005),
+        trunc_gaussian_parameters_for_proba_error=(0, 0),
+        gaussian_parameters_for_tempo_variation=(0, 0),
+        seed=10,
     )
-    augmentor.augment_midi_dataset(
-        test_midi_path.parent, out_path=Path("/tmp/tests"), only_if_doesnt_exist=True
+    augmentor.augment_midi_file(
+        test_midi_path,
+        out_dir=Path("/tmp/augmented_tracks"),
+        include_original_track=True,
     )
+    # augmentor.augment_midi_dataset(
+    #     test_midi_path.parent, out_path=Path("/tmp/tests"), only_if_doesnt_exist=True
+    # )
