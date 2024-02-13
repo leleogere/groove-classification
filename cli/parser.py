@@ -21,6 +21,7 @@ class ScriptParameters:
     # Track processor parameters
     track_processor_type: TrackProcessors
     track_processor_pianoroll_resolution: int
+    track_processor_grammar_weights_file: Path
     # Models parameters
     model_type: GenreClassifierType
     model_lstm_hidden_size: int
@@ -132,6 +133,14 @@ def parse_args() -> ScriptParameters:
         default=30,
         help=f"Pianoroll resolution in steps per second (only for {TrackProcessors.pianoroll}).",
     )
+    track_processor_group.add_argument(
+        "--track-processor-grammar-weights-file",
+        type=Path,
+        help=(
+            "File containing the grammar and the weights associated to each rule (only for"
+            f" {TrackProcessors.grammar})."
+        ),
+    )
 
     # Models group
     models_group = parser.add_argument_group("Models")
@@ -242,6 +251,7 @@ def parse_args() -> ScriptParameters:
         training_l2_regularization=args.training_l2_regularization,
         track_processor_type=args.track_processor,
         track_processor_pianoroll_resolution=args.track_processor_pianoroll_resolution,
+        track_processor_grammar_weights_file=args.track_processor_grammar_file,
         model_type=args.model,
         model_lstm_hidden_size=args.model_lstm_hidden_size,
         model_lstm_num_layers=args.model_lstm_num_layers,

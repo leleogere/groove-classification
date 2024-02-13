@@ -1,5 +1,6 @@
 from enum import Enum
 
+from data_processing.track_processor_grammar import GrammarTrackProcessor
 from data_processing.track_processor_multivariate import PianoRollTrackProcessor
 from data_processing.track_processor_relative import RelativeMultivariateTrackProcessor
 
@@ -7,6 +8,7 @@ from data_processing.track_processor_relative import RelativeMultivariateTrackPr
 class TrackProcessors(Enum):
     multivariate = RelativeMultivariateTrackProcessor
     pianoroll = PianoRollTrackProcessor
+    grammar = GrammarTrackProcessor
 
     def __str__(self):
         return self.name

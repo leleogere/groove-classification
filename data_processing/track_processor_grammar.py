@@ -15,9 +15,9 @@ from utils.grammar import Node
 class GrammarTrackProcessor(TrackProcessor):
     short_name = "pianoroll"
 
-    def __init__(self, grammar_file: Path, use_tempo: bool = True, sequences_dir: Path = None):
+    def __init__(self, weights_file: Path, use_tempo: bool = True, sequences_dir: Path = None):
         super().__init__(use_tempo=use_tempo)
-        self.grammar_file = grammar_file
+        self.grammar_file = weights_file
         self.scoring_env = self._initialize_a_scoring_env()
         # self.scoring_env.set_order(False)  # To get the best trees (equivalent of option -max)
         # self.scoring_env.set_trs(pyqparse.Mode.Drum)
