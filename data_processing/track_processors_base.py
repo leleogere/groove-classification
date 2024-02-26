@@ -27,7 +27,7 @@ class TrackProcessor:
         """
         return self.__class__.__name__
 
-    def notes_to_tensor(self, track: Track) -> torch.Tensor:
+    def track_to_tensor(self, track: Track) -> torch.Tensor:
         """Operation that turn the *note* events of a track into a tensor. The shape of the
         resulting tensor should be (num_notes, num_features).
 
@@ -44,7 +44,7 @@ class TrackProcessor:
             and label.
         """
         return ProcessedTrack(
-            notes_tensor=self.notes_to_tensor(track),
+            processed_data=self.track_to_tensor(track),
             **track.__dict__,
         )
 
@@ -96,7 +96,7 @@ class TrackProcessor:
         """
         results = {
             "midi_paths": [pt.midi_path for pt in batch],
-            "samples": self.collate_samples_fn([pt.notes_tensor for pt in batch]),
+            "samples": self.collate_samples_fn([pt.processed_data for pt in batch]),
             "labels": self.collate_labels_fn([pt.label_idx for pt in batch]),
         }
         if self.use_tempo:

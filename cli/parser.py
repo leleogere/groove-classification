@@ -251,7 +251,7 @@ def parse_args() -> ScriptParameters:
         training_l2_regularization=args.training_l2_regularization,
         track_processor_type=args.track_processor,
         track_processor_pianoroll_resolution=args.track_processor_pianoroll_resolution,
-        track_processor_grammar_weights_file=args.track_processor_grammar_file,
+        track_processor_grammar_weights_file=args.track_processor_grammar_weights_file,
         model_type=args.model,
         model_lstm_hidden_size=args.model_lstm_hidden_size,
         model_lstm_num_layers=args.model_lstm_num_layers,

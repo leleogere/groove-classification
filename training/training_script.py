@@ -8,6 +8,10 @@ import torch
 
 from cli.parser import ScriptParameters
 from cli.parser import parse_args
+from data_augmentation.midi_augmentor import MidiAugmentor
+from data_augmentation.midi_splitter import MidiSplitter
+from data_augmentation.midi_splitter import RuleSequenceSplitter
+from data_processing.track_processor_enum import TrackProcessors
 from data_processing.track_processors_base import TrackProcessor
 from dataset.groove_dataset import GrooveMidiModule
 
@@ -21,24 +25,42 @@ def main(params: ScriptParameters):
         if parameter.startswith(track_processor_param_prefix)
     }
     track_processor_params["use_tempo"] = params.use_tempo
+    if params.track_processor_type == TrackProcessors.grammar:
+        track_processor_params["sequences_dir"] = params.processed_data_path / "sequences"
     track_processor: TrackProcessor = params.track_processor_type.value(**track_processor_params)
+    augmentor = MidiAugmentor(
+        num_variations_per_track=params.num_augmentations,
+        include_original_track=True,
+    )
+    if params.track_processor_type != TrackProcessors.grammar:
+        splitter = MidiSplitter(
+            num_measures_per_chunk=params.num_measures_per_chunk,
+            chunk_overlap=params.chunk_overlap,
+        )
+    else:
+        splitter = RuleSequenceSplitter(
+            grammar_processor=track_processor,
+            num_measures_per_chunk=params.num_measures_per_chunk,
+            chunk_overlap=params.chunk_overlap,
+        )
+    filter_if_grammar = (
+        (lambda t: t.time_signature == (4, 4))
+        if params.track_processor_type.name == "grammar"
+        else None
+    )
     groove_module = GrooveMidiModule(
         path=params.data_path,
+        processed_data_path=params.processed_data_path,
         batch_size=params.training_batch_size,
         track_processor=track_processor,
         min_tracks_per_label=params.min_tracks_per_label,
-        cache_location=params.processed_data_path / "cache",
-        split_dataset_into_measures=True,
-        split_dataset_into_measures_kwargs=dict(
-            split_path=params.processed_data_path / "split",
-            num_measures_per_chunk=params.num_measures_per_chunk,
-            chunk_overlap=params.chunk_overlap,
-        ),
-        augment_dataset=params.num_augmentations > 0,
-        augment_dataset_kwargs=dict(
-            augmented_path=params.processed_data_path / "augmented",
-            num_augmentations=params.num_augmentations,
-            seed=22,
+        augmentor=augmentor,
+        splitter=splitter,
+        filter_tracks=filter_if_grammar,
+        n_jobs=(
+            int(0.75 * os.cpu_count())
+            # if params.track_processor_type != TrackProcessors.grammar
+            # else 1  # Parallelism is not supported for grammar processor yet (pyqparse unpicklable)
         ),
     )
 

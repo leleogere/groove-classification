@@ -2,6 +2,8 @@ import inspect
 import json
 import re
 import sys
+from collections import defaultdict
+from collections import namedtuple
 from pathlib import Path
 from typing import Any
 from typing import Callable
@@ -11,25 +13,123 @@ import pyqparse
 
 sys.setrecursionlimit(10000)  # to avoid RecursionError when parsing large trees
 
-FIRST_MEASURE_RULE = 35
+
+class Rule:
+    def __init__(self, id_: int, name: str, is_terminal: bool):
+        self.id = id_
+        self.name = name
+        self.is_terminal = is_terminal
+
+    def __repr__(self):
+        return f"Rule(id={self.id}, name={self.name}, is_terminal={self.is_terminal})"
+
+
+class Grammar:
+    _SpecialRuleInfos = namedtuple(
+        "RuleInfo", ["as_string", "simple_id", "offset_with_basic_rules"]
+    )
+    SIMPLE_TERMINAL_RULE_ID = _SpecialRuleInfos("TERMINAL", 0, None)
+    SIMPLE_MEASURE_SPLIT_RULE = _SpecialRuleInfos("MEASURE_SPLIT", 1, 3)
+    SIMPLE_END_OF_TRACK_RULE = _SpecialRuleInfos("END_OF_TRACK", 2, None)
+    SIMPLE_FAIL_ZERO_RULE = _SpecialRuleInfos("FAIL_ZERO", 3, 0)
+    SIMPLE_FAIL_INF_RULE = _SpecialRuleInfos("FAIL_INF", 4, 1)
+    SIMPLE_SPECIAL_RULES = {
+        SIMPLE_TERMINAL_RULE_ID,
+        SIMPLE_MEASURE_SPLIT_RULE,
+        SIMPLE_END_OF_TRACK_RULE,
+        SIMPLE_FAIL_ZERO_RULE,
+        SIMPLE_FAIL_INF_RULE,
+    }
+
+    def __init__(self, basic_rules: dict[int, Rule]):
+        self.basic_rules = basic_rules
+        self._create_simplified_ids()
+
+    @property
+    def first_measure_split_id(self) -> int:
+        return len(self.basic_rules) + self.SIMPLE_MEASURE_SPLIT_RULE.offset_with_basic_rules
+
+    def num_simplified_rules(self) -> int:
+        return max(self._simplified_ids.values()) + 1
+
+    def _create_simplified_ids(self):
+        self._simplified_ids = {}
+        current_idx = len(self.SIMPLE_SPECIAL_RULES)  # Skip ids for special rules
+        for rule in self.basic_rules.values():
+            if rule.is_terminal:
+                self._simplified_ids[rule.id] = self.SIMPLE_TERMINAL_RULE_ID.simple_id
+            else:
+                self._simplified_ids[rule.id] = current_idx
+                current_idx += 1
+
+    def simplify_rule(self, rule_id: int) -> int:
+        if rule_id in self._simplified_ids:
+            return self._simplified_ids[rule_id]
+        else:
+            fail_zero_position = (
+                len(self.basic_rules) + self.SIMPLE_FAIL_ZERO_RULE.offset_with_basic_rules
+            )
+            fail_inf_position = (
+                len(self.basic_rules) + self.SIMPLE_FAIL_INF_RULE.offset_with_basic_rules
+            )
+            first_measure_split_position = (
+                len(self.basic_rules) + self.SIMPLE_MEASURE_SPLIT_RULE.offset_with_basic_rules
+            )
+            if rule_id == fail_zero_position:
+                simplified_id = self.SIMPLE_FAIL_ZERO_RULE[1]
+            elif rule_id == fail_inf_position:
+                simplified_id = self.SIMPLE_FAIL_INF_RULE[1]
+            elif rule_id >= first_measure_split_position:
+                if (rule_id - first_measure_split_position) % 2 == 0:
+                    simplified_id = self.SIMPLE_MEASURE_SPLIT_RULE[1]
+                else:
+                    simplified_id = self.SIMPLE_END_OF_TRACK_RULE[1]
+            else:
+                raise ValueError(f"Unknown rule ID {rule_id}")
+        return simplified_id
+
+    @classmethod
+    def from_file(cls, grammar_file: Path):
+        BasicRule = namedtuple("BasicRule", ["as_string", "is_terminal"])
+        pattern = re.compile(
+            r"^\d+\s*->\s*\w+\s*(\(\d+(?:,\s*\d+)*\))?\s*\d+(?:\.\d*)?\s*(?://.*)?$"
+        )
+        basic_rules_list: list[BasicRule] = []
+        with open(grammar_file, "r") as f:
+            for line in f:
+                if match := pattern.match(line):
+                    is_terminal = match.group(1) is None
+                    basic_rules_list.append(BasicRule(line.strip(), is_terminal))
+        rules = {
+            id_: Rule(id_, rule.as_string, rule.is_terminal)
+            for id_, rule in enumerate(basic_rules_list)
+        }
+        return cls(rules)
 
 
 class Node:
     _frozen = False
 
-    def __init__(self, pyqparse_tree: pyqparse.LRT, fix_production_rules: bool = True):
+    def __init__(
+        self,
+        pyqparse_tree: pyqparse.LRT,
+        grammar: Grammar,
+    ):
         self._pyqparse_tree = pyqparse_tree
+        self.grammar = grammar
+        # self.rules = rules
+        # self.rules_simplifier = rules_to_simplified_mapping(self.rules)
         self.production_rule_id = self._pyqparse_tree.production()
         self.children = [
-            self.__class__(self._pyqparse_tree.child(i), fix_production_rules=False)
+            self.__class__(self._pyqparse_tree.child(i), grammar)
             for i in range(self._pyqparse_tree.nbc())
         ]
         has_midi_events = self._pyqparse_tree.has_jam()
         self.midi_start_index = self._pyqparse_tree.label_first() if has_midi_events else None
         self.midi_num_events = self._pyqparse_tree.label_length() if has_midi_events else None
-        if fix_production_rules:
-            self._fix_production_rules()
         self._frozen = True
+        if self._pyqparse_tree.fail():
+            raise ValueError(f"Parsing failed in {self}")
 
     @property
     def is_measure_split(self) -> bool:
@@ -37,7 +137,7 @@ class Node:
         Whether the node is a measure split.
         :return: Whether the node is a measure split.
         """
-        return self.production_rule_id >= FIRST_MEASURE_RULE or self.production_rule_id == -1
+        return self.production_rule_id >= self.grammar.first_measure_split_id
 
     def __setattr__(self, key, value):
         if self._frozen and key not in self.__dict__:
@@ -71,13 +171,22 @@ class Node:
         """
         return self.is_terminal and not self.has_midi_events
 
-    @property
-    def production_rule_explicit(self) -> str:
-        """
-        Get a string representation of the production rule.
-        :return: String representation of the production rule.
-        """
-        raise NotImplementedError
+    # def production_id_simplified(self):
+    #     return self.rules_simplifier[self.production_rule_id]
+
+    # @property
+    # def production_rule_explicit(self) -> str:
+    #     """
+    #     Get a string representation of the production rule.
+    #     :return: String representation of the production rule.
+    #     """
+    #     if self.rules is not None:
+    #         return self.rules.get(
+    #             self.production_rule_id,
+    #             f"No representation for rule {self.production_rule_id}",
+    #         )
+    #     else:
+    #         raise ValueError("No rules mapping.")
 
     @property
     def has_midi_events(self) -> bool:
@@ -103,36 +212,6 @@ class Node:
         """
         return self.midi_last_index - 1
 
-    def _fix_production_rules(self, rules_mapping: Callable[[int], int] = None):
-        self.update_production_rule_id(FIRST_MEASURE_RULE, update_children=True)
-        if rules_mapping is None:
-            rules_mapping = _rules_mapping
-
-        def update_recursively(node: Node):
-            node.production_rule_id = rules_mapping(node)
-            for child in node.children:
-                update_recursively(child)
-
-        update_recursively(self)
-
-    def update_production_rule_id(self, new_id: int, update_children: bool = True):
-        """
-        Update the production rule ID, and optionally update the children's production rule IDs.
-        :param new_id: New production rule ID.
-        :param update_children: Whether to update the children's production rule IDs. If True, the
-            children's production rule IDs are updated to child_id + new_id - old_id.
-        :return:
-        """
-
-        def modify_recursively(node: Node, offset: int):
-            node.production_rule_id += offset
-            if update_children:  # use update_children from the outer scope
-                for child in node.children:
-                    modify_recursively(child, offset)
-
-        offset = new_id - self.production_rule_id
-        modify_recursively(self, offset)
-
     def traverse_tree(self, function: Callable[[Self], Any] = None) -> list[Any]:
         """
         Traverse the tree in a prefix order, eventually getting a value for a function to each node.
@@ -153,7 +232,10 @@ class Node:
         """
         return self.traverse_tree(lambda n: n.production_rule_id)
 
-    def get_production_rule_ids_and_midi_indices(self) -> list[tuple[int, tuple[int, int] | None]]:
+    def get_production_rule_ids_and_midi_indices(
+        self,
+        simplified_ids: bool = True,
+    ) -> list[tuple[int, tuple[int, int] | None]]:
         """
         Get the production rule IDs and MIDI indices of the tree.
         :return: List of tuples (production rule ID, MIDI indices).
@@ -163,7 +245,12 @@ class Node:
             label_slice = (
                 (node.midi_start_index, node.midi_last_index) if node.has_midi_events else None
             )
-            return node.production_rule_id, label_slice
+            id_ = (
+                node.production_rule_id
+                if not simplified_ids
+                else self.grammar.simplify_rule(node.production_rule_id)
+            )
+            return id_, label_slice
 
         return self.traverse_tree(get_info_for_one_node)
 
@@ -180,10 +267,15 @@ class Node:
             is_last = i == len(self.children) - 1
             child.print_tree(next_indent, is_last)
 
-    def to_expanded_tree_string(self, display_midi_indices: bool = False) -> str:
+    def to_expanded_tree_string(
+        self,
+        display_midi_indices: bool = False,
+        simplified_ids: bool = False,
+    ) -> str:
         """
         Get a string representation of the tree.
         :param display_midi_indices: Whether to display the MIDI indices after the production rule.
+        :param simplified_ids: Whether to display the simplified IDs.
         :return: String representation of the tree.
         """
 
@@ -192,9 +284,14 @@ class Node:
             prefix: str = "",
             is_last: bool = False,
         ):
-            string = prefix + ("└─ " if is_last else "├─ ") + str(node.production_rule_id)
+            id_ = (
+                node.production_rule_id
+                if not simplified_ids
+                else self.grammar.simplify_rule(node.production_rule_id)
+            )
+            string = prefix + ("└─ " if is_last else "├─ ") + str(id_)
             if node.is_measure_split:
-                string = str(node.production_rule_id)
+                string = str(id_)
                 prefix = ""
             if display_midi_indices and node.is_terminal:
                 if not node.is_last:
@@ -222,7 +319,7 @@ class Node:
             json.dump(content, f, separators=(",", ":"))  # separators to remove spaces
 
     def __str__(self):
-        return self.to_expanded_tree_string(display_midi_indices=True)
+        return self.to_expanded_tree_string(display_midi_indices=True, simplified_ids=True)
 
     def __repr__(self):
         return (
@@ -237,13 +334,31 @@ class Node:
         return self.children[item]
 
 
-def _rules_mapping(node: Node):
-    if node.is_measure_split:
-        return -1
-    elif node.is_terminal:
-        return -2
-    else:
-        return node.production_rule_id
+# def read_rules(grammar_file: Path, additional_rules: dict[int, str] = None) -> dict[int, str]:
+#     """
+#     Read the production rules from a grammar file.
+#     :param grammar_file: Path to the grammar file.
+#     :param additional_rules: Additional rules to add to the dictionary.
+#     :return: Dictionary of production rules.
+#     """
+#     pattern = re.compile(
+#         r"^(\d+)\s*->\s*\w+\s*(?:\(\d+(?:,\s*\d+)*\))?\s*\d+(?:\.\d*)?\s*(?://.*)?$", flags=re.M
+#     )
+#     grouped_rules = {}
+#     with open(grammar_file, "r") as f:
+#         grouped_rules = defaultdict(list)
+#         for line in f:
+#             if match := pattern.match(line):
+#                 grouped_rules[int(match.group(1))].append(line.strip())
+#     # Sort the rules
+#     sorted_rules = [rule for rule in sorted(grouped_rules.items(), key=lambda x: x[0])]
+#     # Flatten the list of rules
+#     flatten_rules = [rule for _, rules in sorted_rules for rule in rules]
+#     # Rewrite rules with ID
+#     rules = {i: rule for i, rule in enumerate(flatten_rules)}
+#     if additional_rules is not None:
+#         rules.update(additional_rules)
+#     return rules
 
 
 # def split_tree_into_measures(node: pyqparse.LRT) -> list[pyqparse.LRT]:
@@ -267,6 +382,7 @@ def build_scoring_env(
     tempo: int,
     time_signature: tuple[int, int],
     grammar_file: Path,
+    track_nb: int = 0,
 ) -> pyqparse.ScoringEnv:
     # Setup basic options for scoring environment
     scoring_env = pyqparse.ScoringEnv()
@@ -287,21 +403,31 @@ def build_scoring_env(
         filename=str(path),
         format=pyqparse.Format.MIDI,
         mode=pyqparse.Mode.Drum,
-        tracknb=0,
+        tracknb=track_nb,
     )
     return scoring_env
 
 
 if __name__ == "__main__":
-    MIDI_FILE = Path("../groove_data/groove/drummer1/session1/1_funk_80_beat_4-4.mid")
+    # MIDI_FILE = Path("../groove_data/groove/drummer1/session1/1_funk_80_beat_4-4.mid")
+    MIDI_FILE = Path(
+        "/tmp/training_tests/processed/augmented_num=0/groove/drummer4/session1/3_jazz-klezmer_152_beat_4-4/3_jazz-klezmer_152_beat_4-4_variation=original.mid"
+    )
     GRAMMAR_FILE = Path("utils/grammar.wta")
+
+    from pprint import pprint
+
+    grammar = Grammar.from_file(GRAMMAR_FILE)
+    pprint(grammar.basic_rules)
+    print(f"{grammar.num_simplified_rules() = }")
 
     bpm = int(re.search(r"\d+_[a-z0-9\-]+_(\d+|\d+\.\d+)_.*\.mid", MIDI_FILE.name).group(1))
 
     scoring_env = build_scoring_env(MIDI_FILE, bpm, (4, 4), GRAMMAR_FILE)
-    scoring_env.export_MEI("/tmp/test.mei")
+    scoring_env.print_WTA()
+    # scoring_env.export_MEI("/tmp/test.mei")
 
     raw_tree = scoring_env.best_tree(pyqparse.Model.DrumAgostini, 1)
-    tree = Node(raw_tree)
-    print(tree.to_expanded_tree_string())
+    tree = Node(raw_tree, grammar)
+    print(tree.to_expanded_tree_string(simplified_ids=True))
     breakpoint()

@@ -1,11 +1,14 @@
 import copy
 import csv
+import os
 import tempfile
 import zipfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Callable
 from typing import Iterable
+from typing import Type
+from typing import TypeVar
 from urllib.request import urlretrieve
 
 import lightning as L
@@ -15,7 +18,9 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 
 from data_augmentation.midi_augmentor import MidiAugmentor
+from data_augmentation.midi_splitter import MidiSplitter
 from data_augmentation.midi_splitter import Splitter
+from data_augmentation.midi_splitter import SplitterAbstract
 from data_processing.track_processor_relative import RelativeMultivariateTrackProcessor
 from data_processing.track_processors_base import TrackProcessor
 from utils.classes import Track
@@ -89,79 +94,6 @@ class GrooveMidiDataset(TrackDataset):
         )
 
 
-######################
-# DATASET PROCESSING #
-######################
-
-
-def split_midi_dataset(
-    dataset: TrackDataset,
-    split_path: Path,
-    num_measures_per_chunk: int = 4,
-    chunk_overlap: bool = False,
-    force_split_recomputation: bool = False,
-    in_place: bool = False,
-) -> TrackDataset:
-    split_path = split_path.absolute()
-    splitter: Splitter = Splitter(num_measures_per_chunk, chunk_overlap)
-    chunk_paths = splitter.split_midi_dataset(
-        dataset.tracks,
-        split_path,
-        overwrite_existing=force_split_recomputation,
-        subpbar=False,
-    )
-    new_tracks = [
-        Track.from_partial(track, midi_path=chunk_path)
-        for track in dataset.tracks
-        for chunk_path in chunk_paths[track.midi_path]
-    ]
-    if not in_place:
-        dataset = dataset.copy()
-    dataset.tracks = new_tracks
-    return dataset
-
-
-def augment_midi_dataset(
-    dataset: TrackDataset,
-    augmented_path: Path,
-    num_augmentations: int = 1,
-    force_augmentation_recomputation: bool = False,
-    in_place: bool = False,
-    seed: int | None = None,
-    **augmentator_kwargs,
-) -> TrackDataset:
-    augmentor = MidiAugmentor(seed=seed, **augmentator_kwargs)
-    augmented_file_paths: dict[Path, list[Path]] = augmentor.augment_midi_dataset(
-        dataset.tracks,
-        augmented_path,
-        num_variations_per_track=num_augmentations,
-        only_if_doesnt_exist=not force_augmentation_recomputation,
-    )
-    # new_tracks = [
-    #     Track.from_partial(track, midi_path=augmented_path)
-    #     for track in dataset.tracks
-    #     for augmented_path in augmented_file_paths[track.midi_path]
-    # ]
-    bpm_files = {}
-
-    def get_bpm(file_path: Path):
-        parent = file_path.parent
-        if parent not in bpm_files:
-            bpm_files[parent] = load_json(parent / MidiAugmentor.bpm_filename)
-        return bpm_files[parent][file_path.name]
-
-    new_tracks = [
-        Track.from_partial(track, midi_path=augmented_path, bpm=get_bpm(augmented_path))
-        for track in dataset.tracks
-        for augmented_path in augmented_file_paths[track.midi_path]
-    ]
-    del bpm_files
-    if not in_place:
-        dataset = dataset.copy()
-    dataset.tracks = new_tracks
-    return dataset
-
-
 ################
 # DATA MODULES #
 ################
@@ -173,6 +105,9 @@ class GrooveMidiModule(L.LightningDataModule):
     )
     _success_file_name: str = ".success"
     _groove_folder_name: str = "groove"
+    _cache_folder_name: str = "cache"
+    _augmentation_folder_prefix: str = "augmented"
+    _split_folder_prefix: str = "split"
     _labels_file_name: str = "labels.txt"
     _already_setup: bool = False
     num_workers: int = 20
@@ -180,41 +115,37 @@ class GrooveMidiModule(L.LightningDataModule):
     def __init__(
         self,
         path: Path,
+        processed_data_path: Path = Path(tempfile.gettempdir()),
         batch_size: int = 128,
         track_processor: TrackProcessor | None = None,
         min_tracks_per_label: int = 20,
-        cache_location: Path = Path(tempfile.gettempdir()),
-        split_dataset_into_measures: bool = False,
-        split_dataset_into_measures_kwargs: dict = None,
-        augment_dataset: bool = False,
-        augment_dataset_kwargs: dict = None,
+        augmentor: MidiAugmentor | None = None,
+        splitter: Splitter | None = None,
+        filter_tracks: Callable[[Track], bool] | None = None,
+        n_jobs: int = 1,
     ):
         super().__init__()
         self.path = path
+        self.processed_data_path = processed_data_path
         self.batch_size = batch_size
         self.track_processor = track_processor
         self.min_tracks_per_label = min_tracks_per_label
-        self.cache_location = cache_location
-        self.split_dataset_into_measures = split_dataset_into_measures
-        self.split_dataset_into_measures_kwargs = (
-            split_dataset_into_measures_kwargs
-            if split_dataset_into_measures_kwargs is not None
-            else {}
-        )
-        self.augment_dataset = augment_dataset
-        self.augment_dataset_kwargs = (
-            augment_dataset_kwargs if augment_dataset_kwargs is not None else {}
-        )
+        self.augmentor = augmentor
+        self.splitter = splitter
+        self.filter_tracks = filter_tracks if filter_tracks is not None else lambda x: True
+        self.n_jobs = n_jobs
 
         # Other attributes
         self.drums = DRUMS
         if self.track_processor is not None:
-            self.memory = Memory(location=self.cache_location, verbose=0)
-            self.track_processor.notes_to_tensor = self.memory.cache(
-                self.track_processor.notes_to_tensor
+            self.memory = Memory(
+                location=self.processed_data_path / self._cache_folder_name, verbose=0
+            )
+            self.track_processor.track_to_tensor = self.memory.cache(
+                self.track_processor.track_to_tensor, ignore=["self"]
             )
 
-    def prepare_data(self) -> None:
+    def prepare_data(self) -> None:  # TODO: HERE
         success_file = self.path / self._success_file_name
         # Download dataset
         if not success_file.exists():
@@ -246,7 +177,7 @@ class GrooveMidiModule(L.LightningDataModule):
         for split in split_keys:
             datasets[split] = GrooveMidiDataset(
                 dataset_path,
-                filter_tracks=lambda x: x.split == split,
+                filter_tracks=lambda x: x.split == split and self.filter_tracks(x),
                 track_processor=self.track_processor,
             )
             for track in datasets[split].tracks:
@@ -271,41 +202,41 @@ class GrooveMidiModule(L.LightningDataModule):
                 track.label_idx = self.label_to_id[track.label]
 
         # Augment dataset if needed
-        if self.augment_dataset:
-            if "augmented_path" not in self.augment_dataset_kwargs:
-                raise ValueError(
-                    "You must specify the 'augmented_path' argument in 'dataset_class_kwargs' to"
-                    " augment the dataset."
-                )
-            self.augment_dataset_kwargs["augmented_path"] = (
-                self.augment_dataset_kwargs["augmented_path"]
-                / f"augmentations={self.augment_dataset_kwargs['num_augmentations']}"
+        if self.augmentor is not None:
+            augmented_path = (
+                self.processed_data_path
+                / f"{self._augmentation_folder_prefix}_num={self.augmentor.num_variations_per_track}"
             )
             # Augment only the train set
-            augment_midi_dataset(datasets[train_key], in_place=True, **self.augment_dataset_kwargs)
+            augmented_tracks_dict = self.augmentor.augment_list_of_tracks(
+                tracks=datasets[train_key].tracks,
+                output_dir=augmented_path,
+                skip_existing=True,
+                root_path=self.path,
+                n_jobs=self.n_jobs,
+            )
+            datasets[train_key].tracks = sum(augmented_tracks_dict.values(), start=[])
             for track in datasets[train_key].tracks:
                 self.label_infos[track.label][train_key]["augmented"] += 1
 
         # Split dataset into measures if needed
-        if self.split_dataset_into_measures:
-            if "split_path" not in self.split_dataset_into_measures_kwargs:
-                raise ValueError(
-                    "You must specify the 'split_path' argument in 'dataset_class_kwargs' to split"
-                    " the dataset."
-                )
-            split_folder_name_elements = [
-                f"augmentations={self.augment_dataset_kwargs['num_augmentations']}",
-                f"measures={self.split_dataset_into_measures_kwargs['num_measures_per_chunk']}",
-                f"overlap={self.split_dataset_into_measures_kwargs['chunk_overlap']}",
-            ]
-            self.split_dataset_into_measures_kwargs["split_path"] = (
-                self.split_dataset_into_measures_kwargs["split_path"]
-                / "_".join(split_folder_name_elements)
+
+        if self.splitter is not None:
+            split_path = (
+                self.processed_data_path
+                / f"{self._split_folder_prefix}_measures={self.splitter.num_measures_per_chunk}"
             )
+            # Split only the train set
+            split_tracks_dict = self.splitter.split_list_of_tracks(
+                tracks=datasets[train_key].tracks,
+                output_dir=split_path,
+                root_path=self.path if self.augmentor is None else augmented_path,
+                skip_existing=True,
+                n_jobs=self.n_jobs,
+            )
+            # Split all datasets
             for split in split_keys:
-                split_midi_dataset(
-                    datasets[split], in_place=True, **self.split_dataset_into_measures_kwargs
-                )
+                datasets[split].tracks = sum(split_tracks_dict.values(), start=[])
                 for track in datasets[split].tracks:
                     self.label_infos[track.label][split]["chunks"] += 1
 
@@ -376,26 +307,18 @@ class GrooveMidiModule(L.LightningDataModule):
 
 
 if __name__ == "__main__":
-    DATASET_PATH = Path("../data/test_data")
+    DATASET_PATH = Path("/tmp/groove_module")
 
     data_module = GrooveMidiModule(
         DATASET_PATH,
         track_processor=RelativeMultivariateTrackProcessor(DRUMS),
-        split_dataset_into_measures=True,
-        split_dataset_into_measures_kwargs={
-            "split_path": DATASET_PATH / "split",
-            "num_measures_per_chunk": 2,
-            "chunk_overlap": False,
-        },
-        augment_dataset=True,
-        augment_dataset_kwargs={
-            "augmented_path": DATASET_PATH / "augmented",
-            "num_augmentations": 2,
-        },
+        augmentor=MidiAugmentor(num_variations_per_track=3, include_original_track=True),
+        splitter=MidiSplitter(num_measures_per_chunk=4, chunk_overlap=False),
+        # n_jobs=int(0.75 * os.cpu_count()),
     )
 
     data_module.prepare_data()
     data_module.setup(stage="fit")
     batch = next(iter(data_module.train_dataloader()))
     print(batch)
-    print(batch["vectors"].shape)
+    print(batch["samples"].shape)

@@ -11,7 +11,7 @@ class PianoRollTrackProcessor(TrackProcessor):
         super().__init__(use_tempo=use_tempo)
         self.resolution = resolution
 
-    def notes_to_tensor(self, track: Track):
+    def track_to_tensor(self, track: Track):
         notes = track.notes()
         start = notes[0].start
         end = max(note.end for note in notes)  # last starting note might not be the last ending one

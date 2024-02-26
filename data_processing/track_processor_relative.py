@@ -14,7 +14,7 @@ class RelativeMultivariateTrackProcessor(TrackProcessor):
     def __init__(self, use_tempo: bool = True):
         super().__init__(use_tempo=use_tempo)
 
-    def notes_to_tensor(self, track: Track):
+    def track_to_tensor(self, track: Track):
         # Turn a list of dict (RelativeNote.__slots__) into a dict of lists.
         note_attributes = defaultdict(list)
         for note in track.relative_notes():

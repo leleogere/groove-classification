@@ -1,3 +1,4 @@
+import copy
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -86,13 +87,15 @@ class Track:
         time_signature: tuple[int, int] = None,
         split: str = None,
         label_idx: int = None,
+        other_data: dict[str, Any] = None,
     ):
         self.midi_path = midi_path
         self.label = label
-        self.bpm = bpm
+        self.bpm = int(bpm)  # Allow float BPM?
         self.time_signature = time_signature
         self.split = split
         self.label_idx = label_idx
+        self.other_data = other_data if other_data is not None else {}
 
     def notes(self) -> list[Note]:
         midi = load_and_validate_midi_file(
@@ -110,8 +113,8 @@ class Track:
 
     def relative_notes(self) -> list[RelativeNote]:
         relative_notes = [
-            RelativeNote.from_note(n, timeshift=n_next.start - n.start)
-            for n, n_next in zip(self.notes(), self.notes()[1:] + [self.notes()[-1]])
+            RelativeNote.from_note(n, timeshift=n.start - n_prev.start)
+            for n_prev, n in zip([self.notes()[0]] + self.notes(), self.notes())
         ]
         return relative_notes
 
@@ -147,7 +150,7 @@ class Track:
 
     @classmethod
     def from_partial(cls, track: Self, **kwargs) -> Self:
-        d = track.__dict__.copy()
+        d = copy.deepcopy(track.__dict__)
         d.update(kwargs)
         return cls(**d)
 
@@ -155,8 +158,8 @@ class Track:
 class ProcessedTrack(Track):
     def __init__(
         self,
-        notes_tensor: torch.Tensor,
+        processed_data: torch.Tensor | Any,
         **kwargs,
     ):
         super().__init__(**kwargs)
-        self.notes_tensor = notes_tensor
+        self.processed_data = processed_data
