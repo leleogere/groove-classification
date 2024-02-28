@@ -40,6 +40,7 @@ if __name__ == "__main__":
         "--processed-data-path", type=Path, required=True, help="Path to store the processed data."
     )
     parser.add_argument("--results-path", type=Path, required=True, help="Path to the results.")
+    parser.add_argument("--grammar-path", type=Path, required=True, help="Path to the weights file for the grammar processor.")
     parser.add_argument(
         "--start-at", type=int, default=0, help="Index of the first hyperparameter set to run."
     )
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     HYPERPARAMETERS = [
-        HyperParameter("TrackProcessorType", ["multivariate", "pianoroll"]),
+        HyperParameter("TrackProcessorType", ["grammar", "multivariate", "pianoroll"]),
         HyperParameter("TrackProcessorPianorollResolution", [30]),
         HyperParameter("Model", ["lstm", "transformer"]),
         HyperParameter("LstmHiddenSize", [8, 16, 32]),  # , 64, 96, 128]),
@@ -116,6 +117,8 @@ if __name__ == "__main__":
                 (("Model", "transformer"), "Lstm"),
                 # Pop pianoroll paramameters for multivariate processor
                 (("TrackProcessorType", "multivariate"), r"TrackProcessorPianoroll"),
+                # Pop pianoroll parameters for grammar processor
+                (("TrackProcessorType", "grammar"), r"TrackProcessorPianoroll"),
             ]
         if not inplace:
             hps = copy.deepcopy(hps)
@@ -151,6 +154,7 @@ if __name__ == "__main__":
             training_l2_regularization=hparams["L2Regularization"],
             track_processor_type=TrackProcessors.from_str(hparams["TrackProcessorType"]),
             track_processor_pianoroll_resolution=hparams["TrackProcessorPianorollResolution"],
+            track_processor_grammar_weights_file=args.grammar_path,
             model_type=GenreClassifierType.from_str(hparams["Model"]),
             model_lstm_hidden_size=hparams["LstmHiddenSize"],
             model_lstm_num_layers=hparams["LstmNumLayers"],
