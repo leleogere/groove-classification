@@ -35,10 +35,10 @@ RUN git clone https://gitlab.inria.fr/qparse/qparselib.git "$QPARSE_PATH" &&\
     cd extern/libmei && sed -i 's/^ *add_definitions( *-Werror *)/#&/' CMakeLists.txt &&\
     mkdir build && cd build && cmake .. && make -j$PARALLEL_MAKE_JOBS && make -j$PARALLEL_MAKE_JOBS install && cd "$QPARSE_PATH" &&\
     # Build and install libmusicxml
-    cd extern/libmusicxml/build && cmake . && make -j$PARALLEL_MAKE_JOBS && cd "$QPARSE_PATH"
+    cd extern/libmusicxml/build && cmake . && make -j$PARALLEL_MAKE_JOBS
 
 # Build and install drumparse and pyqparse from qparselib
-RUN if [ ! -d build ]; then mkdir build; fi && cd build &&\
+RUN cd "$QPARSE_PATH" && if [ ! -d build ]; then mkdir build; fi && cd build &&\
     cmake .. -DPython3_FIND_STRATEGY=LOCATION &&\
     make -j$PARALLEL_MAKE_JOBS drumparse &&\
     make -j$PARALLEL_MAKE_JOBS pyqparse
