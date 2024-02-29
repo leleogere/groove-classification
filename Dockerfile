@@ -20,8 +20,8 @@ USER root
 
 # Clone and install qparselib and dependencies
 ARG QPARSE_PATH="/app/qparselib"
-RUN make_jobs=8 &&\
-    git clone https://gitlab.inria.fr/qparse/qparselib.git "$QPARSE_PATH" &&\
+ARG PARALLEL_MAKE_JOBS=4
+RUN git clone https://gitlab.inria.fr/qparse/qparselib.git "$QPARSE_PATH" &&\
     cd qparselib && git checkout gmd-score && git pull &&\
     # Remove automatically pulled submodule to install it manually (avoid some conflicts)
     rm -r extern/midifile extern/libmei extern/libmusicxml  &&\
@@ -30,15 +30,18 @@ RUN make_jobs=8 &&\
     git clone https://github.com/DDMAL/libmei.git --branch master extern/libmei &&\
     git clone https://github.com/grame-cncm/libmusicxml.git --branch dev extern/libmusicxml &&\
     # Build and install midifile
-    cd extern/midifile && make -j$make_jobs library && cd "$QPARSE_PATH" &&\
+    cd extern/midifile && make -j$PARALLEL_MAKE_JOBS library && cd "$QPARSE_PATH" &&\
     # Build and install libmei (need to remove -Werror flag from CMakelists.txt)
     cd extern/libmei && sed -i 's/^ *add_definitions( *-Werror *)/#&/' CMakeLists.txt &&\
-    mkdir build && cd build && cmake .. && make -j$make_jobs && make -j$make_jobs install && cd "$QPARSE_PATH" &&\
+    mkdir build && cd build && cmake .. && make -j$PARALLEL_MAKE_JOBS && make -j$PARALLEL_MAKE_JOBS install && cd "$QPARSE_PATH" &&\
     # Build and install libmusicxml
-    cd extern/libmusicxml/build && cmake . && make -j$make_jobs && cd "$QPARSE_PATH" &&\
-    # Build and install drumparse and pyqparse from qparselib
-    mkdir build && cd build && cmake .. -DPython3_FIND_STRATEGY=LOCATION &&\
-    make -j$make_jobs drumparse && make -j$make_jobs pyqparse
+    cd extern/libmusicxml/build && cmake . && make -j$PARALLEL_MAKE_JOBS && cd "$QPARSE_PATH" \
+
+# Build and install drumparse and pyqparse from qparselib
+RUN if [ ! -d build ]; then mkdir build; fi && cd build &&\
+    cmake .. -DPython3_FIND_STRATEGY=LOCATION &&\
+    make -j$PARALLEL_MAKE_JOBS drumparse &&\
+    make -j$PARALLEL_MAKE_JOBS pyqparse
 
 # Make qparselib available everywhere
 ENV PATH="${PATH}:${QPARSE_PATH}/build"
