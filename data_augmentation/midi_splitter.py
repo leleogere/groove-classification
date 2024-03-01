@@ -392,7 +392,7 @@ class RuleSequenceSplitter(SplitterAbstract):
         formatting_number_width = len(str(num_measures))
         chunks = []
         if self.chunk_overlap:
-            range_ = range(0, num_measures - self.num_measures_per_chunk + 2)
+            range_ = range(0, num_measures - self.num_measures_per_chunk + 1)
         else:
             range_ = range(0, num_measures, self.num_measures_per_chunk)
         if range_.stop > num_measures:
