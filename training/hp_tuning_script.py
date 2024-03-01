@@ -111,11 +111,11 @@ if __name__ == "__main__":
     ) -> dict:
         if invalid_rules is None:
             invalid_rules = [
-                # Pop transformer paramameters for LSTM model
+                # Pop transformer parameters for LSTM model
                 (("Model", "lstm"), r"Transformer"),
-                # Pop LSTM paramameters for transformer model
+                # Pop LSTM parameters for transformer model
                 (("Model", "transformer"), "Lstm"),
-                # Pop pianoroll paramameters for multivariate processor
+                # Pop pianoroll parameters for multivariate processor
                 (("TrackProcessorType", "multivariate"), r"TrackProcessorPianoroll"),
                 # Pop pianoroll parameters for grammar processor
                 (("TrackProcessorType", "grammar"), r"TrackProcessorPianoroll"),
