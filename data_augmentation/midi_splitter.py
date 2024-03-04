@@ -259,7 +259,9 @@ class MidiSplitter(SplitterAbstract):
         # Prepare MIDI template
         def create_chunk_template() -> pm.PrettyMIDI:
             chunk_template = pm.PrettyMIDI(initial_tempo=bpm, resolution=midi.resolution)
-            chunk_template.time_signature_changes.append(time_signature)
+            chunk_template.time_signature_changes.append(
+                pm.TimeSignature(time_signature[0], time_signature[1], 0.0)
+            )
             chunk_template.instruments.append(
                 pm.Instrument(pm_track.program, is_drum=pm_track.is_drum, name=pm_track.name)
             )
