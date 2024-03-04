@@ -37,7 +37,7 @@ class GrammarTrackProcessor(TrackProcessor):
         self.sequences_dir = sequences_dir
         self.memory = joblib.Memory(self.sequences_dir, verbose=0)
         self.track_to_sequence = self.memory.cache(self.track_to_sequence, ignore=["self"])
-        self.get_rules_and_indices = self.memory.cache(self.sequence_to_tensor, ignore=["self"])
+        self.sequence_to_tensor = self.memory.cache(self.sequence_to_tensor, ignore=["self"])
 
     def track_to_sequence(
         self,

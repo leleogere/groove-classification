@@ -138,9 +138,10 @@ class GrooveMidiModule(L.LightningDataModule):
         # Other attributes
         self.drums = DRUMS
         if self.track_processor is not None:
-            self.memory = Memory(
-                location=self.processed_data_path / self._cache_folder_name, verbose=0
+            cache_folder = (
+                self.processed_data_path / self._cache_folder_name / self.track_processor.short_name
             )
+            self.memory = Memory(location=cache_folder, verbose=0)
             self.track_processor.track_to_tensor = self.memory.cache(
                 self.track_processor.track_to_tensor, ignore=["self"]
             )
@@ -226,16 +227,20 @@ class GrooveMidiModule(L.LightningDataModule):
                 self.processed_data_path
                 / f"{self._split_folder_prefix}_measures={self.splitter.num_measures_per_chunk}"
             )
-            # Split only the train set
-            split_tracks_dict = self.splitter.split_list_of_tracks(
-                tracks=datasets[train_key].tracks,
-                output_dir=split_path,
-                root_path=self.path if self.augmentor is None else augmented_path,
-                skip_existing=True,
-                n_jobs=self.n_jobs,
-            )
             # Split all datasets
             for split in split_keys:
+                root_path = (
+                    augmented_path
+                    if self.augmentor is not None and split == train_key
+                    else self.path
+                )
+                split_tracks_dict = self.splitter.split_list_of_tracks(
+                    tracks=datasets[split].tracks,
+                    output_dir=split_path,
+                    root_path=root_path,
+                    skip_existing=True,
+                    n_jobs=self.n_jobs,
+                )
                 datasets[split].tracks = sum(split_tracks_dict.values(), start=[])
                 for track in datasets[split].tracks:
                     self.label_infos[track.label][split]["chunks"] += 1

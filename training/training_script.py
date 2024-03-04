@@ -26,7 +26,9 @@ def main(params: ScriptParameters):
     }
     track_processor_params["use_tempo"] = params.use_tempo
     if params.track_processor_type == TrackProcessors.grammar:
-        track_processor_params["sequences_dir"] = params.processed_data_path / "sequences"
+        track_processor_params["sequences_dir"] = (
+            params.processed_data_path / "cache" / "rule_sequences"
+        )
     track_processor: TrackProcessor = params.track_processor_type.value(**track_processor_params)
     augmentor = MidiAugmentor(
         num_variations_per_track=params.num_augmentations,
