@@ -71,7 +71,6 @@ class GrammarTrackProcessor(TrackProcessor):
         # does not crash the main process.
         environ = os.environ.copy()
         try:
-            print(track.time_signature)
             json_tree = subprocess.run(
                 [
                     "python",
