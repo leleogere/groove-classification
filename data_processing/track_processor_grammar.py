@@ -52,15 +52,47 @@ class GrammarTrackProcessor(TrackProcessor):
             the exception.
         :return: Sequence of rules and indices.
         """
+        # try:
+        #     tree = self._build_tree(track)
+        # except ValueError as e:
+        #     if none_if_parsing_failed:
+        #         print(f"Error in tree built from {track.midi_path}: {e}")
+        #         return None
+        #     else:
+        #         raise e
+        # sequence = tree.get_production_rule_ids_and_midi_indices(simplified_ids=True)
+        # return sequence
+
+        # Run the parsing as a subprocess bc pyqparse is sometimes result in a segfault when
+        # dealing with complex rythms. This way, the segfault is contained in the subprocess, and
+        # does not crash the main process.
+        environ = os.environ.copy()
         try:
-            tree = self._build_tree(track)
-        except ValueError as e:
+            print(track.time_signature)
+            json_tree = subprocess.run(
+                [
+                    "python",
+                    "utils/_parse_midi_subprocess.py",
+                    str(track.midi_path),
+                    "--tempo",
+                    str(track.bpm),
+                    "--time-signature",
+                    str(track.time_signature[0]),
+                    str(track.time_signature[1]),
+                    "--grammar-file",
+                    str(self.grammar_file),
+                ],
+                check=True,
+                capture_output=True,
+                env=environ,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"Error in tree built from {track.midi_path}: {e.stderr.decode()}")
             if none_if_parsing_failed:
-                print(f"Error in tree built from {track.midi_path}: {e}")
                 return None
             else:
                 raise e
-        sequence = tree.get_production_rule_ids_and_midi_indices(simplified_ids=True)
+        sequence = json.loads(json_tree.stdout)
         return sequence
 
     def sequence_to_tensor(self, sequence: list[RuleWithIndices], track: Track) -> torch.Tensor:
@@ -250,11 +282,12 @@ class GrammarTrackProcessor(TrackProcessor):
 
 
 if __name__ == "__main__":
-    from joblib import Parallel, delayed, dump
     from utils.utils import parse_bpm_from_file_name, parse_time_signature_from_file_name
 
-    MIDI_PATH = Path("../groove_data/groove/drummer1/session1")
-    midi_paths = list(MIDI_PATH.rglob("*_funk_*.mid"))
+    # MIDI_PATH = Path("../groove_data/groove/drummer1/session1")
+    # midi_paths = list(MIDI_PATH.rglob("*_funk_*.mid"))
+    MIDI_PATH = Path("/tmp/augmented_tracks")
+    midi_paths = list(MIDI_PATH.rglob("*.mid"))
     print(midi_paths)
     print(f"{len(midi_paths) = }")
     tracks = [
@@ -267,10 +300,11 @@ if __name__ == "__main__":
     ]
     GRAMMAR_FILE = Path("utils/grammar.wta")
 
-    processor = GrammarTrackProcessor(GRAMMAR_FILE, sequences_dir=Path("/tmp/joblib_cache"))
+    processor = GrammarTrackProcessor(GRAMMAR_FILE, sequences_dir=None)
 
     for track in tracks:
-        sequence = processor.track_to_sequence(track)
+        sequence = processor.track_to_sequence(track, none_if_parsing_failed=True)
         print(sequence)
-        tensor = processor.sequence_to_tensor(sequence, track)
-        print(tensor)
+        if sequence is not None:
+            tensor = processor.sequence_to_tensor(sequence, track)
+            print(tensor)
