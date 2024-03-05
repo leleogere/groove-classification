@@ -11,8 +11,8 @@ import torch
 import pyqparse
 
 from data_processing.track_processors_base import TrackProcessor
-from utils.classes import ProcessedTrack
-from utils.classes import Track
+from utils.utils import ProcessedTrack
+from utils.utils import Track
 from utils.constants import DRUMS
 from utils.grammar import Grammar
 from utils.grammar import Node
@@ -125,7 +125,7 @@ class GrammarTrackProcessor(TrackProcessor):
             drums_tensor[i, ids] = 1
         return torch.cat([rules_tensor, drums_tensor], dim=1)
 
-    def track_to_tensor(
+    def track_to_tensor_with_positions(
         self,
         track: Track,
         none_if_parsing_failed: bool = False,
@@ -134,7 +134,8 @@ class GrammarTrackProcessor(TrackProcessor):
             sequence = track.other_data["sequence"]
         else:
             sequence = self.track_to_sequence(track, none_if_parsing_failed=none_if_parsing_failed)
-        return self.sequence_to_tensor(sequence, track)
+        positions = list(range(len(sequence)))  # TODO: tree positional encoding?
+        return self.sequence_to_tensor(sequence, track), positions
 
     # def export_last_parsed_file_to_svg(self, path: Path, delete_mei: bool = True):
     #     # Export MEI file to /tmp

@@ -1,13 +1,14 @@
 import time
 from enum import Enum
 from typing import Callable
+from typing import Type
 
 import lightning as L
 import torch
 from torch import nn
 from torchmetrics.classification import MulticlassF1Score
 
-from models.utils import TupleExtractor
+from models.positional_encoding import ContinuousPositionalEncoder
 from utils.confusion_matrix import confusion_matrix_pipeline
 
 
@@ -56,14 +57,14 @@ class GenreClassifier(L.LightningModule):
         self.accumulated_predictions = {}
         self._reset_accumulated_predictions()
 
-    def forward(self, x, tempo=None):
+    def forward(self, x, **kwargs):
         # print(f"Before module: {x.shape = }")
-        x = self.base_module(x)
+        x = self.base_module(x, **kwargs)
         # print(f"After module: {x.shape = }")
         x = x[:, -1, :]  # Keep only last step
         # Add tempo
         if self.use_tempo:
-            x = torch.cat([x, tempo], dim=-1)
+            x = torch.cat([x, kwargs["tempo"]], dim=-1)
         # print(f'Before batch norm: {x.shape = }')
         x = self.batch_normalization(x)
         # print(f'After batch norm: {x.shape = }')
@@ -80,9 +81,10 @@ class GenreClassifier(L.LightningModule):
         # Get data
         x = batch["samples"]
         y = batch["labels"]
+        pos = batch["_positions"]
         tempo = batch["tempos"] if self.use_tempo else None
         # Apply model
-        y_hat = self.forward(x, tempo)
+        y_hat = self.forward(x, tempo=tempo, positions=pos)
         # Compute and log loss
         loss = self.criterion(y_hat, y)
         self.log(f"{key}/loss", loss, on_step=False, on_epoch=True, prog_bar=True)
@@ -144,6 +146,30 @@ class GenreClassifier(L.LightningModule):
             self.accumulated_predictions[key] = default_dict()
 
 
+class LSTMModule(nn.Module):
+    def __init__(
+        self,
+        input_dim: int,
+        hidden_size: int,
+        num_layers: int,
+        dropout_rate: float,
+        bidirectional: bool = True,
+    ):
+        super().__init__()
+        self.lstm = nn.LSTM(
+            input_dim,
+            hidden_size,
+            num_layers=num_layers,
+            batch_first=True,
+            dropout=dropout_rate,
+            bidirectional=bidirectional,
+        )
+
+    def forward(self, x, **kwargs):
+        x, _ = self.lstm(x)
+        return x
+
+
 class GenreClassifierLSTM(GenreClassifier):
     def __init__(
         self,
@@ -160,34 +186,12 @@ class GenreClassifierLSTM(GenreClassifier):
         hparams_to_log: dict = None,
     ):
         bidirectional = True
-
-        class UniqueOutputLSTM(nn.Module):
-            def __init__(
-                self,
-                input_dim_: int,
-                hidden_size_: int,
-                num_layers_: int,
-                dropout_rate_: float,
-            ):
-                super().__init__()
-                self.lstm = nn.LSTM(
-                    input_dim_,
-                    hidden_size_,
-                    num_layers=num_layers_,
-                    batch_first=True,
-                    bidirectional=bidirectional,
-                    dropout=dropout_rate_,
-                )
-
-            def forward(self, x):
-                x, _ = self.lstm(x)
-                return x
-
-        module = UniqueOutputLSTM(
-            input_dim_=input_dim,
-            hidden_size_=hidden_size,
-            num_layers_=num_layers,
-            dropout_rate_=dropout_rate,
+        module = LSTMModule(
+            input_dim=input_dim,
+            hidden_size=hidden_size,
+            num_layers=num_layers,
+            dropout_rate=dropout_rate,
+            bidirectional=bidirectional,
         )
 
         super().__init__(
@@ -204,7 +208,7 @@ class GenreClassifierLSTM(GenreClassifier):
         )
 
 
-class GenreClassifierTransformer(GenreClassifier):
+class TransformerModule(nn.Module):
     def __init__(
         self,
         input_dim: int,
@@ -212,20 +216,16 @@ class GenreClassifierTransformer(GenreClassifier):
         num_features_per_head: int,
         feedforward_dim: int,
         num_layers: int,
-        num_classes: int,
+        positional_encoder: Type[nn.Module],
         dropout_rate: float = 0.1,
-        lr: float = 1e-3,
-        use_tempo: bool = False,
-        class_names: list[str] = None,
-        name: str = None,
-        loss_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = nn.CrossEntropyLoss(),
-        hparams_to_log: dict = None,
     ):
+        super().__init__()
         # torch need embed_dim % nheads == 0, so we add a linear layer to adjust the input dimension
         encoder_input_dim = num_heads * num_features_per_head
-        linear = nn.Linear(input_dim, encoder_input_dim)
-        relu = nn.ReLU()
-        encoder = nn.TransformerEncoder(
+        self.linear = nn.Linear(input_dim, encoder_input_dim)
+        self.relu = nn.ReLU()
+        self.pe = positional_encoder(d_model=encoder_input_dim, dropout=0.1)
+        self.encoder = nn.TransformerEncoder(
             encoder_layer=nn.TransformerEncoderLayer(
                 d_model=encoder_input_dim,
                 nhead=num_heads,
@@ -235,10 +235,49 @@ class GenreClassifierTransformer(GenreClassifier):
             ),
             num_layers=num_layers,
         )
-        module = nn.Sequential(linear, relu, encoder)
+
+    def forward(self, x, **kwargs):
+        x = self.linear(x)
+        x = self.relu(x)
+        if isinstance(self.pe, ContinuousPositionalEncoder):
+            x = self.pe(x, kwargs["positions"])
+        else:
+            x = self.pe(x)
+        x = self.encoder(x)
+        return x
+
+
+class GenreClassifierTransformer(GenreClassifier):
+    def __init__(
+        self,
+        input_dim: int,
+        num_heads: int,
+        num_features_per_head: int,
+        feedforward_dim: int,
+        num_layers: int,
+        num_classes: int,
+        positional_encoder: Type[nn.Module],
+        dropout_rate: float = 0.1,
+        lr: float = 1e-3,
+        use_tempo: bool = False,
+        class_names: list[str] = None,
+        name: str = None,
+        loss_function: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = nn.CrossEntropyLoss(),
+        hparams_to_log: dict = None,
+    ):
+        # torch need embed_dim % nheads == 0, so we add a linear layer to adjust the input dimension
+        module = TransformerModule(
+            input_dim=input_dim,
+            num_heads=num_heads,
+            num_features_per_head=num_features_per_head,
+            feedforward_dim=feedforward_dim,
+            num_layers=num_layers,
+            positional_encoder=positional_encoder,
+            dropout_rate=dropout_rate,
+        )
         super().__init__(
             base_module=module,
-            base_module_output_dim=encoder_input_dim,
+            base_module_output_dim=module.linear.out_features,
             num_classes=num_classes,
             dropout_rate=dropout_rate,
             lr=lr,

@@ -23,7 +23,7 @@ from data_augmentation.midi_splitter import Splitter
 from data_augmentation.midi_splitter import SplitterAbstract
 from data_processing.track_processor_relative import RelativeMultivariateTrackProcessor
 from data_processing.track_processors_base import TrackProcessor
-from utils.classes import Track
+from utils.utils import Track
 from utils.constants import DRUMS
 from utils.utils import load_json
 from utils.utils import process_label
@@ -142,8 +142,8 @@ class GrooveMidiModule(L.LightningDataModule):
                 self.processed_data_path / self._cache_folder_name / self.track_processor.short_name
             )
             self.memory = Memory(location=cache_folder, verbose=0)
-            self.track_processor.track_to_tensor = self.memory.cache(
-                self.track_processor.track_to_tensor, ignore=["self"]
+            self.track_processor.track_to_tensor_with_positions = self.memory.cache(
+                self.track_processor.track_to_tensor_with_positions, ignore=["self"]
             )
 
     def prepare_data(self) -> None:  # TODO: HERE
@@ -187,11 +187,13 @@ class GrooveMidiModule(L.LightningDataModule):
         self.export_label_infos(dataset_path / self._labels_file_name)
 
         # Filter labels with less than min_tracks_per_label tracks in the train set
-        self.unique_labels = sorted([
-            label
-            for label, infos in self.label_infos.items()
-            if infos[train_key]["tracks"] >= self.min_tracks_per_label
-        ])
+        self.unique_labels = sorted(
+            [
+                label
+                for label, infos in self.label_infos.items()
+                if infos[train_key]["tracks"] >= self.min_tracks_per_label
+            ]
+        )
         self.label_to_id = {label: i for i, label in enumerate(self.unique_labels)}
         self.id_to_label = {i: label for label, i in self.label_to_id.items()}
         for split in split_keys:

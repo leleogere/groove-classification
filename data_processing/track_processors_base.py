@@ -1,8 +1,10 @@
+import copy
+
 import torch
 from torch import nn
 
-from utils.classes import ProcessedTrack
-from utils.classes import Track
+from utils.utils import ProcessedTrack
+from utils.utils import Track
 from utils.constants import DRUMS
 
 
@@ -27,6 +29,21 @@ class TrackProcessor:
         """
         return self.__class__.__name__
 
+    def track_to_tensor_with_positions(
+        self,
+        track: Track,
+    ) -> tuple[torch.Tensor, list[float | int]]:
+        """
+        Operation that turns the *note* events of a track into a tensor. The shape of the
+        resulting tensor should be (num_notes, num_features). This function also return the
+        position (whatever that means for this processor) of each element in the tensor.
+
+        :param track: Track to process.
+        :return: A tuple containing the tensor representation of a track and a list of the position
+            of each of its elements.
+        """
+        raise NotImplementedError
+
     def track_to_tensor(self, track: Track) -> torch.Tensor:
         """Operation that turn the *note* events of a track into a tensor. The shape of the
         resulting tensor should be (num_notes, num_features).
@@ -34,7 +51,7 @@ class TrackProcessor:
         :param track: Track to process.
         :return: Tensor representation of the track's notes.
         """
-        raise NotImplementedError
+        return self.track_to_tensor_with_positions(track)[0]
 
     def process_track(self, track: Track) -> ProcessedTrack:
         """Process a track.
@@ -43,10 +60,10 @@ class TrackProcessor:
         :return: Processed track, containing the tensor representation of the track's notes, tempo
             and label.
         """
-        return ProcessedTrack(
-            processed_data=self.track_to_tensor(track),
-            **track.__dict__,
-        )
+        tensor, positions = self.track_to_tensor_with_positions(track)
+        track_attributes_copy = copy.deepcopy(track.__dict__)
+        track_attributes_copy["other_data"]["positions"] = positions
+        return ProcessedTrack(processed_data=self.track_to_tensor(track), **track_attributes_copy)
 
     def collate_samples_fn(self, batch_of_notes_tensors: list[torch.Tensor]) -> torch.Tensor:
         """Collate function that stacks the note attributes of a batch of tracks.
@@ -88,16 +105,45 @@ class TrackProcessor:
         """
         return torch.LongTensor(batch_of_label_idxs)
 
+    def collate_positions_fn(
+        self,
+        batch_of_positions: list[list[float | int]],
+        max_len: int = None,
+    ) -> torch.Tensor:
+        """Collate function that stacks a list of positions.
+
+        :param batch_of_positions: Batch of positions.
+        :param max_len: Maximum length of the sequences if already known. If None, the maximum
+            length of the sequences in the batch is used.
+        :return: Stacked tensor of shape (batch_size, num_notes).
+        """
+        if max_len is None:
+            max_len = max(len(positions) for positions in batch_of_positions)
+        padded = [
+            nn.functional.pad(
+                input=torch.FloatTensor(positions),
+                pad=(max_len - len(positions), 0),
+                value=self.padding_value,
+            )
+            for positions in batch_of_positions
+        ]
+        stacked = torch.stack(padded)
+        return stacked
+
     def collate_fn(self, batch: list[ProcessedTrack]) -> dict[str, torch.Tensor]:
         """Collate function that stacks the attributes of a batch of tracks.
 
         :param batch: Batch of processed tracks (computed by self.process_track).
         :return: Stacked tensors of shape (batch_size, ...).
         """
+        collated_samples = self.collate_samples_fn([pt.processed_data for pt in batch])
         results = {
             "midi_paths": [pt.midi_path for pt in batch],
-            "samples": self.collate_samples_fn([pt.processed_data for pt in batch]),
+            "samples": collated_samples,
             "labels": self.collate_labels_fn([pt.label_idx for pt in batch]),
+            "_positions": self.collate_positions_fn(
+                [pt.other_data["positions"] for pt in batch], max_len=collated_samples.shape[1]
+            ),
         }
         if self.use_tempo:
             results["tempos"] = self.collate_tempos_fn([pt.bpm for pt in batch])

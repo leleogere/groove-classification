@@ -1,7 +1,8 @@
+import numpy as np
 import torch
 
 from data_processing.track_processors_base import TrackProcessor
-from utils.classes import Track
+from utils.utils import Track
 
 
 class PianoRollTrackProcessor(TrackProcessor):
@@ -11,7 +12,7 @@ class PianoRollTrackProcessor(TrackProcessor):
         super().__init__(use_tempo=use_tempo)
         self.resolution = resolution
 
-    def track_to_tensor(self, track: Track):
+    def track_to_tensor_with_positions(self, track: Track):
         notes = track.notes()
         start = notes[0].start
         end = max(note.end for note in notes)  # last starting note might not be the last ending one
@@ -24,7 +25,8 @@ class PianoRollTrackProcessor(TrackProcessor):
             piano_roll[self.drums.pitch_to_id[note.pitch], i_start:i_end] = (
                 note.velocity / self.velocity_norm
             )
-        return piano_roll.transpose(0, 1)  # change to (timestep, features)
+        positions = np.linspace(0, length, num_steps).tolist()
+        return piano_roll.transpose(0, 1), positions
 
     @property
     def output_dim(self) -> int:

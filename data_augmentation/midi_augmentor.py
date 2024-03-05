@@ -10,7 +10,7 @@ import numpy as np
 from scipy import stats
 from tqdm import tqdm
 
-from utils.classes import Track
+from utils.utils import Track
 from utils.utils import dump_json
 from utils.utils import find_common_root
 from utils.utils import get_midi_paths

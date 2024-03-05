@@ -14,6 +14,8 @@ from data_augmentation.midi_splitter import RuleSequenceSplitter
 from data_processing.track_processor_enum import TrackProcessors
 from data_processing.track_processors_base import TrackProcessor
 from dataset.groove_dataset import GrooveMidiModule
+from models.positional_encoding import ContinuousPositionalEncoder
+from models.positional_encoding import PositionalEncoder
 
 
 def main(params: ScriptParameters):
@@ -101,11 +103,18 @@ def main(params: ScriptParameters):
             "num_layers": params.model_lstm_num_layers,
         }
     elif params.model_type.name == "transformer":
+        # Create positional encoder
+        if params.track_processor_type in [TrackProcessors.multivariate, TrackProcessors.pianoroll]:
+            positional_encoder = ContinuousPositionalEncoder
+        else:
+            positional_encoder = PositionalEncoder
+        # Specify parameters
         model_specific_params = {
             "num_heads": params.model_transformer_num_heads,
             "num_features_per_head": params.model_transformer_num_features_per_head,
             "feedforward_dim": params.model_transformer_feedforward_dim,
             "num_layers": params.model_transformer_num_layers,
+            "positional_encoder": positional_encoder,
         }
     else:
         raise ValueError(f"Unknown model name: {params.model_type.name}")

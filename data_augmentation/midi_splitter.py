@@ -9,8 +9,8 @@ import pretty_midi as pm
 from tqdm import tqdm
 
 from data_processing.track_processor_grammar import GrammarTrackProcessor
-from utils.classes import ProcessedTrack
-from utils.classes import Track
+from utils.utils import ProcessedTrack
+from utils.utils import Track
 from utils.utils import find_common_root
 from utils.utils import get_midi_paths
 from utils.utils import load_and_validate_midi_file
@@ -312,11 +312,13 @@ class MidiSplitter(SplitterAbstract):
                 chunk.remove_invalid_notes()
 
                 # Run some test in order to test if a chunk is worth saving
-                num_empty_measures = sum([
-                    1
-                    for measure_idx in measures_in_each_chunk[i]
-                    if num_notes_per_measure[measure_idx] == 0
-                ])
+                num_empty_measures = sum(
+                    [
+                        1
+                        for measure_idx in measures_in_each_chunk[i]
+                        if num_notes_per_measure[measure_idx] == 0
+                    ]
+                )
                 num_notes = len(chunk.instruments[0].notes)
                 drop_message = None  # message to log if the chunk is dropped
                 if num_notes == 0:

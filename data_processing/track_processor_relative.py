@@ -3,8 +3,9 @@ from collections import defaultdict
 import torch
 
 from data_processing.track_processors_base import TrackProcessor
-from utils.classes import RelativeNote
-from utils.classes import Track
+from utils.utils import RelativeNote
+from utils.utils import Track
+from utils.utils import compute_relative_notes
 
 
 class RelativeMultivariateTrackProcessor(TrackProcessor):
@@ -14,14 +15,18 @@ class RelativeMultivariateTrackProcessor(TrackProcessor):
     def __init__(self, use_tempo: bool = True):
         super().__init__(use_tempo=use_tempo)
 
-    def track_to_tensor(self, track: Track):
+    def track_to_tensor_with_positions(self, track: Track):
+        # Get all notes
+        notes = track.notes()
+        positions = [n.start for n in notes]
+        relative_notes = compute_relative_notes(notes)
         # Turn a list of dict (RelativeNote.__slots__) into a dict of lists.
         note_attributes = defaultdict(list)
-        for note in track.relative_notes():
+        for rel_note in relative_notes:
             for key in RelativeNote.__slots__:
-                note_attributes[key].append(getattr(note, key))
+                note_attributes[key].append(getattr(rel_note, key))
             # Append drum id for one-hot encoding
-            note_attributes["id"].append(self.drums.pitch_to_id[note.pitch])
+            note_attributes["id"].append(self.drums.pitch_to_id[rel_note.pitch])
 
         vector_components = [
             # the 22 first components are the one-hot encoding of the drum id
@@ -39,7 +44,7 @@ class RelativeMultivariateTrackProcessor(TrackProcessor):
             ],
         ]
         vector = torch.cat(vector_components, dim=-1)
-        return vector
+        return vector, positions
 
     @property
     def output_dim(self) -> int:
