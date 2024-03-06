@@ -151,6 +151,12 @@ def parse_args() -> ScriptParameters:
         choices=list(GenreClassifierType),
         help="Genre classifier type.",
     )
+    models_group.add_argument(
+        "--model-dropout-rate",
+        type=float,
+        default=0.3,
+        help="Dropout rate.",
+    )
     # LSTM
     models_group.add_argument(
         "--model-lstm-hidden-size",
@@ -188,12 +194,6 @@ def parse_args() -> ScriptParameters:
         type=int,
         default=2,
         help="Number of layers in the transformer.",
-    )
-    models_group.add_argument(
-        "--model-dropout-rate",
-        type=float,
-        default=0.3,
-        help="Dropout rate.",
     )
 
     # Data augmentation group
