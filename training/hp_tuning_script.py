@@ -85,30 +85,6 @@ if __name__ == "__main__":
     )  # See https://stackoverflow.com/questions/5228158/cartesian-product-of-a-dictionary-of-lists/40623158
     print(f"Number of hyperparameter sets before filtering: {len(domain)}")
 
-    # def is_valid(hps: dict) -> bool:
-    #     if (
-    #         not hps["TrackProcessorType"] == "pianoroll"
-    #         and hps["TrackProcessorPianorollResolution"] != 30
-    #     ):
-    #         return False
-    #     if hps["Model"] == "lstm":
-    #         if hps["TransformerNumHeads"] != 4:
-    #             return False
-    #         if hps["TransformerNumFeaturesPerHead"] != 4:
-    #             return False
-    #         if hps["TransformerFFDim"] != 32:
-    #             return False
-    #         if hps["TransformerNumLayers"] != 2:
-    #             return False
-    #     elif hps["Model"] == "transformer":
-    #         if hps["LstmHiddenSize"] != 8:
-    #             return False
-    #         if hps["LstmNumLayers"] != 2:
-    #             return False
-    #     else:
-    #         raise ValueError(f"Unknown model: {hps['Model']}")
-    #     return True
-
     def conditional_set_none(
         hps: dict,
         invalid_rules: list[tuple[tuple[str, str], str]] = None,
