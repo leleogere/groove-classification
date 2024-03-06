@@ -9,7 +9,7 @@ from utils.utils import compute_relative_notes
 
 
 class RelativeMultivariateTrackProcessor(TrackProcessor):
-    short_name = "multivariate"
+    short_name = "relative"
     time_norm = 1  # no normalization as times (in seconds) are usually less than 1s
 
     def __init__(self, use_tempo: bool = True):

@@ -104,7 +104,7 @@ def main(params: ScriptParameters):
         }
     elif params.model_type.name == "transformer":
         # Create positional encoder
-        if params.track_processor_type in [TrackProcessors.multivariate, TrackProcessors.pianoroll]:
+        if params.track_processor_type in [TrackProcessors.relative, TrackProcessors.pianoroll]:
             positional_encoder = ContinuousPositionalEncoder
         else:
             positional_encoder = PositionalEncoder

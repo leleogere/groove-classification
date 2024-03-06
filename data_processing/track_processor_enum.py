@@ -1,12 +1,12 @@
 from enum import Enum
 
 from data_processing.track_processor_grammar import GrammarTrackProcessor
-from data_processing.track_processor_multivariate import PianoRollTrackProcessor
+from data_processing.track_processor_pianoroll import PianoRollTrackProcessor
 from data_processing.track_processor_relative import RelativeMultivariateTrackProcessor
 
 
 class TrackProcessors(Enum):
-    multivariate = RelativeMultivariateTrackProcessor
+    relative = RelativeMultivariateTrackProcessor
     pianoroll = PianoRollTrackProcessor
     grammar = GrammarTrackProcessor
 

@@ -52,7 +52,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     HYPERPARAMETERS = [
-        HyperParameter("TrackProcessorType", ["grammar", "multivariate", "pianoroll"]),
+        HyperParameter("TrackProcessorType", ["grammar", "relative", "pianoroll"]),
         HyperParameter("TrackProcessorPianorollResolution", [30]),
         HyperParameter("Model", ["lstm", "transformer"]),
         HyperParameter("LstmHiddenSize", [8, 16, 32]),  # , 64, 96, 128]),
@@ -115,8 +115,8 @@ if __name__ == "__main__":
                 (("Model", "lstm"), r"Transformer"),
                 # Pop LSTM parameters for transformer model
                 (("Model", "transformer"), "Lstm"),
-                # Pop pianoroll parameters for multivariate processor
-                (("TrackProcessorType", "multivariate"), r"TrackProcessorPianoroll"),
+                # Pop pianoroll parameters for relative processor
+                (("TrackProcessorType", "relative"), r"TrackProcessorPianoroll"),
                 # Pop pianoroll parameters for grammar processor
                 (("TrackProcessorType", "grammar"), r"TrackProcessorPianoroll"),
             ]
