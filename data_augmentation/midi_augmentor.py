@@ -56,12 +56,12 @@ class MidiAugmentor:
         self,
         num_variations_per_track: int = 1,
         include_original_track: bool = True,
-        trunc_gaussian_parameters_for_std_time_shift: tuple[float, float] = (0.02, 0.005),
+        trunc_gaussian_parameters_for_std_time_shift: tuple[float, float] = (0.01, 0.005),
         trunc_gaussian_parameters_global_velocity_shape: tuple[float, float] = (0, 0.15),
         trunc_gaussian_parameters_for_std_velocity_shift: tuple[float, float] = (3, 1),
-        trunc_gaussian_parameters_for_proba_error: tuple[float, float] = (0.07, 0.02),
-        gaussian_parameters_for_mean_error_shift: tuple[float, float] = (0.1, 0.03),
-        trunc_gaussian_parameters_for_std_error_shift: tuple[float, float] = (0.04, 0.01),
+        trunc_gaussian_parameters_for_proba_error: tuple[float, float] = (0.03, 0.02),
+        gaussian_parameters_for_mean_error_shift: tuple[float, float] = (0.05, 0.02),
+        trunc_gaussian_parameters_for_std_error_shift: tuple[float, float] = (0.03, 0.01),
         gaussian_parameters_for_tempo_variation: tuple[float, float] = (0, 7),
         _global_velocity_shape_force: float = 0.5,
         seed: int | None = None,
@@ -336,9 +336,9 @@ class MidiAugmentor:
 if __name__ == "__main__":
     TEST = "track"
     augmentor = MidiAugmentor(
-        num_variations_per_track=3,
-        trunc_gaussian_parameters_for_std_time_shift=(0.01, 0.005),
-        trunc_gaussian_parameters_for_proba_error=(0, 0),
+        num_variations_per_track=20,
+        # trunc_gaussian_parameters_for_std_time_shift=(0.01, 0.005),
+        # trunc_gaussian_parameters_for_proba_error=(0, 0),
         # gaussian_parameters_for_tempo_variation=(0, 0),
         seed=10,
     )
