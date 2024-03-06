@@ -40,7 +40,12 @@ if __name__ == "__main__":
         "--processed-data-path", type=Path, required=True, help="Path to store the processed data."
     )
     parser.add_argument("--results-path", type=Path, required=True, help="Path to the results.")
-    parser.add_argument("--grammar-path", type=Path, required=True, help="Path to the weights file for the grammar processor.")
+    parser.add_argument(
+        "--grammar-path",
+        type=Path,
+        required=True,
+        help="Path to the weights file for the grammar processor.",
+    )
     parser.add_argument(
         "--start-at", type=int, default=0, help="Index of the first hyperparameter set to run."
     )
