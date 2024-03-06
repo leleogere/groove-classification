@@ -10,7 +10,7 @@ from utils.utils import compute_relative_notes
 
 class RelativeMultivariateTrackProcessor(TrackProcessor):
     short_name = "multivariate"
-    time_norm = 100  # so duration and timeshift are closer to 0-5
+    time_norm = 1  # no normalization as times (in seconds) are usually less than 1s
 
     def __init__(self, use_tempo: bool = True):
         super().__init__(use_tempo=use_tempo)
