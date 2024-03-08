@@ -11,6 +11,7 @@ import torch
 import pyqparse
 
 from data_processing.track_processors_base import TrackProcessor
+from utils.utils import Note
 from utils.utils import ProcessedTrack
 from utils.utils import Track
 from utils.constants import DRUMS
@@ -116,13 +117,15 @@ class GrammarTrackProcessor(TrackProcessor):
             lambda start_end: range(start_end[0], start_end[1]) if start_end is not None else [],
             indices,
         )
-        notes_pitches = self._get_notes_from_indices(track, indices)
+        notes_per_rule: list[list[Note]] = self._get_notes_from_indices(track, indices)
         rules_tensor = torch.zeros(len(rules), self.grammar.num_simplified_rules())
         rules_tensor[range(len(rules)), rules] = 1
         drums_tensor = torch.zeros(len(rules), len(DRUMS))  # * 0.1  # For debugging in plots
-        for i, pitches in enumerate(notes_pitches):
-            ids = [DRUMS.pitch_to_id[p] for p in pitches]
-            drums_tensor[i, ids] = 1
+        for i, notes in enumerate(notes_per_rule):
+            ids = [DRUMS.pitch_to_id[n.pitch] for n in notes]
+            drums_tensor[i, ids] = torch.FloatTensor(
+                [n.velocity / self.velocity_norm for n in notes]
+            )
         return torch.cat([rules_tensor, drums_tensor], dim=1)
 
     def track_to_tensor_with_positions(
@@ -184,7 +187,7 @@ class GrammarTrackProcessor(TrackProcessor):
         self,
         track: Track,
         indices: Iterable[int] | Iterable[Iterable | int],
-    ) -> list[int | list]:
+    ) -> list[Note | list]:
         """
         Get the notes from a list of indices. The list of indices can be an arbitrary nested list
         of iterables containing integers, and the shape of the structure will be preserved in the
@@ -192,7 +195,7 @@ class GrammarTrackProcessor(TrackProcessor):
 
         :param track: Track to get the notes from.
         :param indices: List (or nested lists) of indices.
-        :return: List (or nested lists) of note pitches.
+        :return: List (or nested lists) of notes.
         """
         midi = load_and_validate_midi_file(
             track.midi_path,
@@ -203,15 +206,6 @@ class GrammarTrackProcessor(TrackProcessor):
         )
 
         midi_note_events = [event for event in midi.tracks[0] if event.type.startswith("note_")]
-        import numpy as np
-
-        indices = list(indices)
-
-        tmp = np.concatenate(list(map(list, indices)))
-        if tmp.max() >= len(midi_note_events):
-            breakpoint()  # TODO: BLOCKED HERE
-        # indices = list(indices)
-        # print(indices)
 
         def _recursive_get_notes_from_indices(int_or_iter):
             # print(int_or_list)
@@ -222,7 +216,10 @@ class GrammarTrackProcessor(TrackProcessor):
                         f" track {track.midi_path}"
                     )
                 event = midi_note_events[int_or_iter]
-                return event.note if event.type == "note_on" else None
+                if event.type == "note_on":
+                    return Note(start=None, end=None, pitch=event.note, velocity=event.velocity)
+                else:
+                    return None
             elif isinstance(int_or_iter, Iterable):
                 return list(
                     filter(  # Filter for None (note_off events)
@@ -233,9 +230,9 @@ class GrammarTrackProcessor(TrackProcessor):
             else:
                 raise ValueError(f"Expected int or iterable, got {type(int_or_iter)}")
 
-        note_pitches = _recursive_get_notes_from_indices(indices)
+        notes = _recursive_get_notes_from_indices(indices)
         # print(x)
-        return note_pitches
+        return notes
 
     @property
     def output_dim(self) -> int:
