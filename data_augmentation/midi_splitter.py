@@ -408,10 +408,10 @@ class RuleSequenceSplitter(SplitterAbstract):
             chunk_rules = rules[start:end]
             chunk_indices = midi_indices[start:end]
             chunk_name = _chunk_filename(
-                track.midi_path,
-                measure_indices[current_index],
-                self.num_measures_per_chunk,
-                formatting_number_width,
+                original_midi_path=track.midi_path,
+                start_bar=current_index,
+                num_bars=self.num_measures_per_chunk,
+                formatting_number_width=formatting_number_width,
             )
             chunk = Track.from_partial(
                 track,
