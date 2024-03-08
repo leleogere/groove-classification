@@ -119,7 +119,7 @@ class GrammarTrackProcessor(TrackProcessor):
         notes_pitches = self._get_notes_from_indices(track, indices)
         rules_tensor = torch.zeros(len(rules), self.grammar.num_simplified_rules())
         rules_tensor[range(len(rules)), rules] = 1
-        drums_tensor = torch.ones(len(notes_pitches), len(DRUMS))  # * 0.1  # For debugging in plots
+        drums_tensor = torch.zeros(len(rules), len(DRUMS))  # * 0.1  # For debugging in plots
         for i, pitches in enumerate(notes_pitches):
             ids = [DRUMS.pitch_to_id[p] for p in pitches]
             drums_tensor[i, ids] = 1
