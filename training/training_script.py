@@ -124,6 +124,7 @@ def main(params: ScriptParameters):
         num_classes=len(groove_module.id_to_label),
         dropout_rate=params.model_dropout_rate,
         lr=params.training_learning_rate,
+        weight_decay=params.training_l2_regularization,
         use_tempo=params.use_tempo,
         class_names=groove_module.unique_labels,
         name=params.model_type.name,

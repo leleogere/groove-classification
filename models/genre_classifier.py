@@ -23,6 +23,7 @@ class GenreClassifier(L.LightningModule):
         num_classes: int,
         dropout_rate: float = 0.1,
         lr: float = 1e-3,
+        weight_decay: float = 0.0,
         use_tempo: bool = False,
         class_names: list[str] = None,
         name: str = None,
@@ -39,6 +40,7 @@ class GenreClassifier(L.LightningModule):
         self.batch_normalization = nn.BatchNorm1d(self.base_module_output_dim)
         self.linear = nn.Linear(self.base_module_output_dim, num_classes)
         self.lr = lr
+        self.weight_decay = weight_decay
         self.num_classes = num_classes
         self.name = name
         self.class_names = (
@@ -75,7 +77,7 @@ class GenreClassifier(L.LightningModule):
         return x
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
 
     def common_step(self, batch, key: str):
         # Get data
@@ -179,6 +181,7 @@ class GenreClassifierLSTM(GenreClassifier):
         num_classes: int,
         dropout_rate: float = 0.1,
         lr: float = 1e-3,
+        weight_decay: float = 0.0,
         use_tempo: bool = False,
         class_names: list[str] = None,
         name: str = None,
@@ -200,6 +203,7 @@ class GenreClassifierLSTM(GenreClassifier):
             num_classes=num_classes,
             dropout_rate=dropout_rate,
             lr=lr,
+            weight_decay=weight_decay,
             use_tempo=use_tempo,
             class_names=class_names,
             name=name,
@@ -259,6 +263,7 @@ class GenreClassifierTransformer(GenreClassifier):
         positional_encoder: Type[nn.Module],
         dropout_rate: float = 0.1,
         lr: float = 1e-3,
+        weight_decay: float = 0.0,
         use_tempo: bool = False,
         class_names: list[str] = None,
         name: str = None,
@@ -281,6 +286,7 @@ class GenreClassifierTransformer(GenreClassifier):
             num_classes=num_classes,
             dropout_rate=dropout_rate,
             lr=lr,
+            weight_decay=weight_decay,
             use_tempo=use_tempo,
             class_names=class_names,
             name=name,
