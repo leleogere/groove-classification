@@ -1,14 +1,37 @@
 FROM mambaorg/micromamba:latest
 
+# Replace mamba user with current one (https://micromamba-docker.readthedocs.io/en/latest/advanced_usage.html#changing-the-user-id-or-name)
+ARG NEW_MAMBA_USER
+ARG NEW_MAMBA_USER_ID
+ARG NEW_MAMBA_USER_GID
+USER root
+RUN if grep -q '^ID=alpine$' /etc/os-release; then \
+      # alpine does not have usermod/groupmod
+      apk add --no-cache --virtual temp-packages shadow; \
+    fi && \
+    usermod "--login=${NEW_MAMBA_USER}" "--home=/home/${NEW_MAMBA_USER}" \
+        --move-home "-u ${NEW_MAMBA_USER_ID}" "${MAMBA_USER}" && \
+    groupmod "--new-name=${NEW_MAMBA_USER}" \
+        "-g ${NEW_MAMBA_USER_GID}" "${MAMBA_USER}" && \
+    if grep -q '^ID=alpine$' /etc/os-release; then \
+      # remove the packages that were only needed for usermod/groupmod
+      apk del temp-packages; \
+    fi && \
+    # Update the expected value of MAMBA_USER for the
+    # _entrypoint.sh consistency check.
+    echo "${NEW_MAMBA_USER}" > "/etc/arg_mamba_user" && \
+    :
+ENV MAMBA_USER=$NEW_MAMBA_USER
+USER $MAMBA_USER
+
 # Install system dependencies
 USER root
 RUN apt update && apt install make cmake g++ git -y
 RUN apt install uuid-dev -y
-USER 1001
+USER $MAMBA_USER
 
 WORKDIR /app
 
-#COPY . /app
 COPY --chown=$MAMBA_USER:$MAMBA_USER env.yml /tmp/env.yaml
 
 ## Create environment from environment.yml
@@ -17,7 +40,6 @@ RUN micromamba install -y -n base -f /tmp/env.yaml && \
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
 
 USER root
-
 # Clone and install qparselib and dependencies
 ARG QPARSE_PATH="/app/qparselib"
 ARG PARALLEL_MAKE_JOBS=4
@@ -42,6 +64,8 @@ RUN cd "$QPARSE_PATH" && if [ ! -d build ]; then mkdir build; fi && cd build &&\
     cmake .. -DPython3_FIND_STRATEGY=LOCATION &&\
     make -j$PARALLEL_MAKE_JOBS drumparse &&\
     make -j$PARALLEL_MAKE_JOBS pyqparse
+
+USER $MAMBA_USER
 
 # Make qparselib available everywhere
 ENV PATH="${PATH}:${QPARSE_PATH}/build"
