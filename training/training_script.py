@@ -35,6 +35,7 @@ def main(params: ScriptParameters):
     augmentor = MidiAugmentor(
         num_variations_per_track=params.num_augmentations,
         include_original_track=True,
+        seed=50,
     )
     if params.track_processor_type != TrackProcessors.grammar:
         splitter = MidiSplitter(

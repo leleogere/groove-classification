@@ -1,11 +1,9 @@
 import copy
 import json
 import shutil
-from collections import defaultdict
 from pathlib import Path
 
 import joblib
-import mido
 import numpy as np
 from scipy import stats
 from tqdm import tqdm
@@ -142,8 +140,6 @@ class MidiAugmentor:
 
         # Prepare noise
         num_notes = len(new_midi.instruments[0].notes)
-        if seed is not None:
-            np.random.seed(seed)
         spb = 60 / bpm  # X beat/minute = 1/X minute/beat = 60/X second/beat
         time_shifts = np.random.normal(0, std_time_shift * spb, num_notes)
         velocity_shaper = lambda x: x ** (self._global_velocity_shape_force**-global_velocity_shape)
@@ -171,7 +167,6 @@ class MidiAugmentor:
         # Write midi
         new_midi.write(str(output_path))
         # Merge tracks into one (needed for grammar functions)
-        # TODO: study if completely switching to mido makes sense?
         merge_tracks(output_path)
         return Track.from_partial(track, midi_path=output_path, bpm=bpm)
 
@@ -289,13 +284,13 @@ class MidiAugmentor:
         if seed is None:
             seed = self.seed
         np.random.seed(seed)
+        seeds = np.random.randint(0, 2**32 - 1, len(tracks))
 
         # Loop over MIDI files
         midi_paths = [t.midi_path for t in tracks]
         midi_sizes = [path.stat().st_size for path in midi_paths]
         if root_path is None:
             root_path = find_common_root(midi_paths)
-        seeds = np.random.randint(0, 2**32 - 1, len(midi_paths))
 
         def _augment_track(track: Track, seed: int):
             """Wrapper to augment a track to be used in parallel."""
