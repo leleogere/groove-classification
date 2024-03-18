@@ -16,6 +16,7 @@ import tabulate
 import torch
 
 from cli.parser import ScriptParameters
+from cli.parser import bool_from_str
 from data_processing.track_processor_enum import TrackProcessors
 from models.genre_classifier import GenreClassifierType
 from training.training_script import main as train_one_model
@@ -41,19 +42,17 @@ class HyperParameter:
 
 def split_parameter_callback(type_: Callable = str, sep: str = ",", strip: bool = True):
     def callback(ctx, param, s):
+        caster = type_
         if s is None or s == "" or s.lower() == "none":
             return [None]
+        if type_ == bool:
+            caster = bool_from_str
         split = s.split(sep)
         if strip:
             split = list(map(str.strip, split))
-        # try:
-        #     split = list(map(type_, split))
-        # except ValueError as e:
-        #     raise click.BadParameter(f"One of the elements in '{s}' cannot be casted into {type_}.")
-        # return split
         for i, x in enumerate(split):
             try:
-                split[i] = type_(x)
+                split[i] = caster(x)
             except ValueError:
                 raise click.BadParameter(f"The element '{x}' cannot be casted into {type_}.")
         return split
