@@ -55,6 +55,8 @@ class GenreClassifier(L.LightningModule):
             }
         )
         if hparams_to_log is not None:
+            num_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+            hparams_to_log["num_parameters"] = num_params
             self.save_hyperparameters(hparams_to_log)
         self.accumulated_predictions = {}
         self._reset_accumulated_predictions()
