@@ -386,7 +386,7 @@ def build_scoring_env(
 ) -> pyqparse.ScoringEnv:
     # Setup basic options for scoring environment
     scoring_env = pyqparse.ScoringEnv()
-    scoring_env.set_order(False)  # To get the best trees (equivalent of option -max)
+    scoring_env.set_order(True)  # To get the best trees (equivalent of option -max)
     scoring_env.set_trs(pyqparse.Mode.Drum)
     scoring_env.set_debug(False)
     # Load grammar file

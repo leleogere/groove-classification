@@ -153,36 +153,6 @@ class GrammarTrackProcessor(TrackProcessor):
     #     if delete_mei:
     #         mei_path.unlink()
 
-    def _initialize_a_scoring_env(self):
-        scoring_env = pyqparse.ScoringEnv()
-        scoring_env.set_order(False)  # To get the best trees (equivalent of option -max)
-        scoring_env.set_trs(pyqparse.Mode.Drum)
-        scoring_env.import_WTA(str(self.grammar_file), pyqparse.WeightCode.Tropical)
-        scoring_env.set_debug(False)
-        return scoring_env
-
-    def _build_tree(self, track: Track):
-        scoring_env = self._initialize_a_scoring_env()
-        # scoring_env = self.scoring_env
-        scoring_env.import_file(
-            filename=str(track.midi_path),
-            format=pyqparse.Format.MIDI,
-            mode=pyqparse.Mode.Drum,
-            tracknb=0,
-        )
-        scoring_env.open_score(str(track.midi_path))
-        assert track.time_signature == (4, 4)  # Only 4/4 supported for now
-        scoring_env.update_time_sig(track.time_signature[0], track.time_signature[1])
-        num_beat_in_measure = scoring_env.get_bar_beats()
-        measure_duration = (60 / track.bpm) * num_beat_in_measure
-        scoring_env.set_tempo(mod=pyqparse.Tempo.Constant, bardur=measure_duration)
-
-        raw_tree = scoring_env.best_tree(pyqparse.Model.DrumAgostini, 1)
-        scoring_env.close_score()
-        tree = Node(raw_tree, self.grammar)
-        # print(tree)
-        return tree
-
     def _get_notes_from_indices(
         self,
         track: Track,
