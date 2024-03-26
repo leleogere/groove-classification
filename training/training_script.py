@@ -168,7 +168,7 @@ def main(params: ScriptParameters):
 
     logger.experiment.finish()
 
-    groove_module.memory.reduce_size(bytes_limit="100G")  # TODO: make this configurable
+    # groove_module.memory.reduce_size(bytes_limit="100G")  # TODO: make this configurable
 
 
 if __name__ == "__main__":
