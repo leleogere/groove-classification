@@ -69,6 +69,7 @@ def split_parameter_callback(type_: Callable = str, sep: str = ",", strip: bool 
 @click.option("--track-processor-type", callback=split_parameter_callback(TrackProcessors.from_str), default=",".join([p.name for p in TrackProcessors]), help=f"Type of track processor ({', '.join([p.name for p in TrackProcessors])}).", metavar='STR')
 @click.option("--track-processor-pianoroll-resolution", callback=split_parameter_callback(int), default="30,50", help="Pianoroll resolution.", metavar='INT')
 @click.option("--track-processor-grammar-weights-file", callback=split_parameter_callback(click.Path(exists=True, dir_okay=False, readable=True, path_type=Path)), default=None, help="Path to the weights file for the grammar processor.", metavar='PATH')
+@click.option("--track-processor-grammar-tree-positional-encoding", callback=split_parameter_callback(bool), default="True,False", help="Whether to use tree positional encoding for the grammar processor, or standard sequence positional encoding.", metavar='BOOL')
 @click.option("--model-type", callback=split_parameter_callback(GenreClassifierType.from_str), default=",".join([p.name for p in GenreClassifierType]), help=f"Type of model ({', '.join([p.name for p in GenreClassifierType])}).", metavar='STR')
 @click.option("--model-lstm-hidden-size", callback=split_parameter_callback(int), default="8,16,32,64", help="Hidden size of the LSTM model.", metavar='INT')
 @click.option("--model-lstm-num-layers", callback=split_parameter_callback(int), default="1,2,3", help="Number of layers in the LSTM model.", metavar='INT')
@@ -95,6 +96,7 @@ def main(
     track_processor_type: TrackProcessors,
     track_processor_pianoroll_resolution: int,
     track_processor_grammar_weights_file: Path,
+    track_processor_grammar_tree_positional_encoding: bool,
     model_type: GenreClassifierType,
     model_lstm_hidden_size: int,
     model_lstm_num_layers: int,

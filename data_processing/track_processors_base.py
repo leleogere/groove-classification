@@ -107,7 +107,7 @@ class TrackProcessor:
 
     def collate_positions_fn(
         self,
-        batch_of_positions: list[list[float | int]],
+        batch_of_positions: list[list[float | int]] | list[list[list[float | int]]],
         max_len: int = None,
     ) -> torch.Tensor:
         """Collate function that stacks a list of positions.
@@ -119,10 +119,15 @@ class TrackProcessor:
         """
         if max_len is None:
             max_len = max(len(positions) for positions in batch_of_positions)
+        pad_maker = (
+            (lambda pos: (max_len - len(pos), 0))
+            if isinstance(batch_of_positions[0][0], int | float)
+            else (lambda pos: (0, 0, max_len - len(pos), 0))  # for vector pos like tree encoding
+        )
         padded = [
             nn.functional.pad(
                 input=torch.FloatTensor(positions),
-                pad=(max_len - len(positions), 0),
+                pad=pad_maker(positions),
                 value=self.padding_value,
             )
             for positions in batch_of_positions

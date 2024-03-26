@@ -90,11 +90,35 @@ class ContinuousPositionalEncoder(nn.Module):
         return self.dropout(x)
 
 
+class TreePositionalEncoder(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        max_depth: int,
+        dropout: float = 0.1,
+    ):
+        super().__init__()
+        self.d_model = d_model
+        self.max_depth = max_depth
+        self.linear = nn.Linear(2 * max_depth, d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x: Tensor, positions: Tensor) -> Tensor:
+        """
+        :param x: Tensor of shape ``[batch_size, seq_len, d_model]``
+        :param positions: List containing for each element of x the path in the tree leading to
+            the corresponding node from the root node in the form [i, n] with i the child index and
+            n the number of children of the parent node.
+        """
+        positions_projected_into_model_shape = self.linear(positions)
+        return self.dropout(x + positions_projected_into_model_shape)
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     d_model = 22
-    seq_len = 10
+    seq_len = 38.4
     # div_factor = 100
     #
     # pe = PositionalEncoder(d_model, 0, max_len=50000, div_factor=div_factor)
@@ -130,7 +154,7 @@ if __name__ == "__main__":
     res = 1000
     positions = torch.arange(0, seq_len, 1 / res)
     print(positions)
-    y = pe(torch.zeros(1, seq_len * res, d_model), positions)
+    y = pe(torch.zeros(1, int(seq_len * res), d_model), positions)
     print(y.shape)
 
     # Plot matrix

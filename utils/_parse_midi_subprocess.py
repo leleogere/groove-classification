@@ -4,8 +4,8 @@ from pathlib import Path
 import pyqparse
 
 from grammar import Grammar
-from grammar import Node
 from grammar import build_scoring_env
+from grammar import Node
 
 pyqparse.set_verbosity_level(0)
 
@@ -25,8 +25,12 @@ def main(
     )
     raw_tree = scoring_env.best_tree(pyqparse.Model.DrumAgostini, 1)
     scoring_env.close_score()
-    tree = Node(raw_tree, Grammar.from_file(grammar_file))
-    tree_str = json.dumps(tree.get_production_rule_ids_and_midi_indices(), separators=(",", ":"))
+    # tree = Node(raw_tree, Grammar.from_file(grammar_file))
+    tree = Node.from_qparse(raw_tree, Grammar.from_file(grammar_file), flatten_measures=True)
+    tree_str = json.dumps(
+        tree.to_dict(),
+        separators=(",", ":"),
+    )
     print(tree_str)
 
 

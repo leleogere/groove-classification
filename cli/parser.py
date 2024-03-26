@@ -22,6 +22,7 @@ class ScriptParameters:
     track_processor_type: TrackProcessors
     track_processor_pianoroll_resolution: int
     track_processor_grammar_weights_file: Path
+    track_processor_grammar_tree_positional_encoding: bool
     # Models parameters
     model_type: GenreClassifierType
     model_lstm_hidden_size: int
@@ -141,6 +142,16 @@ def parse_args() -> ScriptParameters:
             f" {TrackProcessors.grammar})."
         ),
     )
+    track_processor_group.add_argument(
+        "--track-processor-grammar-tree-positional-encoding",
+        type=bool_from_str,
+        help=(
+            "Whether to encode the position of each rule in the tree as a positional encoding "
+            "rather than a naive sequential positional encoding. (only for "
+            f"{TrackProcessors.grammar})."
+        ),
+        default=False,
+    )
 
     # Models group
     models_group = parser.add_argument_group("Models")
@@ -252,6 +263,7 @@ def parse_args() -> ScriptParameters:
         track_processor_type=args.track_processor,
         track_processor_pianoroll_resolution=args.track_processor_pianoroll_resolution,
         track_processor_grammar_weights_file=args.track_processor_grammar_weights_file,
+        track_processor_grammar_tree_positional_encoding=args.track_processor_grammar_tree_positional_encoding,
         model_type=args.model,
         model_lstm_hidden_size=args.model_lstm_hidden_size,
         model_lstm_num_layers=args.model_lstm_num_layers,

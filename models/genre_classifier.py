@@ -9,6 +9,7 @@ from torch import nn
 from torchmetrics.classification import MulticlassF1Score
 
 from models.positional_encoding import ContinuousPositionalEncoder
+from models.positional_encoding import TreePositionalEncoder
 from utils.confusion_matrix import confusion_matrix_pipeline
 
 
@@ -245,7 +246,7 @@ class TransformerModule(nn.Module):
     def forward(self, x, **kwargs):
         x = self.linear(x)
         x = self.relu(x)
-        if isinstance(self.pe, ContinuousPositionalEncoder):
+        if isinstance(self.pe, ContinuousPositionalEncoder | TreePositionalEncoder):
             x = self.pe(x, kwargs["positions"])
         else:
             x = self.pe(x)

@@ -1,5 +1,6 @@
 import os
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 
 import lightning as L
@@ -16,6 +17,7 @@ from data_processing.track_processors_base import TrackProcessor
 from dataset.groove_dataset import GrooveMidiModule
 from models.positional_encoding import ContinuousPositionalEncoder
 from models.positional_encoding import PositionalEncoder
+from models.positional_encoding import TreePositionalEncoder
 
 
 def main(params: ScriptParameters):
@@ -107,8 +109,17 @@ def main(params: ScriptParameters):
         # Create positional encoder
         if params.track_processor_type in [TrackProcessors.relative, TrackProcessors.pianoroll]:
             positional_encoder = ContinuousPositionalEncoder
+        elif params.track_processor_type == TrackProcessors.grammar:
+            print(params.track_processor_grammar_tree_positional_encoding)
+            if params.track_processor_grammar_tree_positional_encoding:
+                positional_encoder = partial(
+                    TreePositionalEncoder,
+                    max_depth=track_processor.grammar.max_depth,
+                )
+            else:
+                positional_encoder = PositionalEncoder
         else:
-            positional_encoder = PositionalEncoder
+            raise ValueError(f"Unknown track processor: {params.track_processor_type}.")
         # Specify parameters
         model_specific_params = {
             "num_heads": params.model_transformer_num_heads,

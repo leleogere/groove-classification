@@ -1,3 +1,4 @@
+import copy
 import inspect
 import json
 import re
@@ -41,9 +42,10 @@ class Grammar:
         SIMPLE_FAIL_INF_RULE,
     }
 
-    def __init__(self, basic_rules: dict[int, Rule]):
+    def __init__(self, basic_rules: dict[int, Rule], max_depth: int = 7):
         self.basic_rules = basic_rules
         self._create_simplified_ids()
+        self.max_depth = max_depth  # TODO: compute it automatically from the grammar?
 
     @property
     def first_measure_split_id(self) -> int:
@@ -108,44 +110,31 @@ class Grammar:
 
 
 class Node:
-    _frozen = False
+    _id_key = "i"
+    _children_key = "c"
+    _start_key = "s"
+    _end_key = "e"
 
     def __init__(
         self,
-        pyqparse_tree: pyqparse.LRT,
         grammar: Grammar,
+        id_: int,
+        children: list[Self],
+        midi_start_index: int = None,
+        midi_last_index: int = None,
     ):
-        self._pyqparse_tree = pyqparse_tree
+        assert not (midi_start_index is None) ^ (midi_last_index is None)
         self.grammar = grammar
-        # self.rules = rules
-        # self.rules_simplifier = rules_to_simplified_mapping(self.rules)
-        self.production_rule_id = self._pyqparse_tree.production()
-        self.children = [
-            self.__class__(self._pyqparse_tree.child(i), grammar)
-            for i in range(self._pyqparse_tree.nbc())
-        ]
-        has_midi_events = self._pyqparse_tree.has_jam()
-        self.midi_start_index = self._pyqparse_tree.label_first() if has_midi_events else None
-        self.midi_num_events = self._pyqparse_tree.label_length() if has_midi_events else None
-        self._frozen = True
-        if self._pyqparse_tree.fail():
-            raise ValueError(f"Parsing failed in {self}")
+        self.id = id_
+        self.children = children
+        self.midi_start_index = midi_start_index
+        self.midi_last_index = midi_last_index
 
-    @property
-    def is_measure_split(self) -> bool:
-        """
-        Whether the node is a measure split.
-        :return: Whether the node is a measure split.
-        """
-        return self.production_rule_id >= self.grammar.first_measure_split_id
-
-    def __setattr__(self, key, value):
-        if self._frozen and key not in self.__dict__:
-            raise AttributeError(
-                f"Cannot set attribute {key} in frozen {self.__class__.__name__} except using"
-                " .update_production_rule_id()."
-            )
-        super().__setattr__(key, value)
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(id={self.id}, children={len(self.children)},"
+            f" midi=({self.midi_start_index}, {self.midi_last_index}))"
+        )
 
     @property
     def nbc(self) -> int:
@@ -155,38 +144,10 @@ class Node:
         """
         return len(self.children)
 
-    @property
-    def is_terminal(self) -> bool:
-        """
-        Whether the node is terminal.
-        :return: Whether the node is terminal.
-        """
-        return self.nbc == 0
-
-    @property
-    def is_last(self) -> bool:
-        """
-        Whether the node is the last node of the tree.
-        :return: Whether the node is the last node of the tree.
-        """
-        return self.is_terminal and not self.has_midi_events
-
-    # def production_id_simplified(self):
-    #     return self.rules_simplifier[self.production_rule_id]
-
-    # @property
-    # def production_rule_explicit(self) -> str:
-    #     """
-    #     Get a string representation of the production rule.
-    #     :return: String representation of the production rule.
-    #     """
-    #     if self.rules is not None:
-    #         return self.rules.get(
-    #             self.production_rule_id,
-    #             f"No representation for rule {self.production_rule_id}",
-    #         )
-    #     else:
-    #         raise ValueError("No rules mapping.")
+    def __getstate__(self):
+        # Prevent pickling the qparse tree as it is not serializable
+        state = {k: v for k, v in self.__dict__.items() if k != "_qparse_tree"}
+        return state
 
     @property
     def has_midi_events(self) -> bool:
@@ -194,144 +155,232 @@ class Node:
         Whether the node has MIDI events.
         :return: Whether the node has MIDI events.
         """
-        return self.midi_start_index is not None and self.midi_num_events is not None
+        return self.midi_start_index is not None
 
-    @property
-    def midi_last_index(self) -> int:
+    def traverse(self, fn: Callable[[Self], Any]) -> list[Any]:
         """
-        Get the last MIDI index of the node (exclusive).
-        :return: Last MIDI index of the node (exclusive).
-        """
-        return self.midi_start_index + self.midi_num_events
+        Traverse the tree in a prefix order, returning the result of the function applied to each
+        node in a prefix depth-first order.
 
-    @property
-    def midi_last_index_inclusive(self) -> int:
+        :param fn: Function to apply to each node.
+        :return: List of results of the function applied to each node as a list.
         """
-        Get the last MIDI index of the node (inclusive).
-        :return: Last MIDI index of the node (inclusive).
-        """
-        return self.midi_last_index - 1
+        return [fn(self)] + sum([child.traverse(fn) for child in self.children], [])
 
-    def traverse_tree(self, function: Callable[[Self], Any] = None) -> list[Any]:
+    def get_positions(self) -> list[list[int]]:
         """
-        Traverse the tree in a prefix order, eventually getting a value for a function to each node.
-        :param function: Function to apply to each node. If None, the node is returned.
-        :return: List of nodes (or values returned by the function).
+        Get the positions of each node in the tree. The positions are returned in a prefix order
+        depth-first order. For each node, the position is a list in which the first half indicates
+        the index of the node of all its parents from the root, and the second half indicates the
+        number of children of all its parents from the root. If the node is less deep than the
+        maximum depth of the grammar, it is padded with zeros.
+
+        For example, the position [3, 1, 2, 0, 0, 7, 3, 2, 0, 0] should be split into
+        [3, 1, 2, 0, 0] and [7, 3, 2, 0, 0], and it means that this node can be reached from the
+        root by going to the 3rd child of the 7 children of the root, then the 1st child of the 3
+        children of the previous node, and finally the last child of the 2 children of the previous
+        node. The last node has 0 children, so lists are padded with zeros.
+
+        :return: List of positions.
         """
-        if function is None:
-            function = lambda x: x
-        return sum(
-            [child.traverse_tree(function) for child in self.children],
-            [function(self)],
+
+        def get_positions_for_one_node(
+            node: Self,
+            child_indices_so_far: list[int],
+            child_numbers_so_far: list[int],
+        ):
+            assert len(child_indices_so_far) == len(child_numbers_so_far)
+            child_positions = sum(
+                [
+                    get_positions_for_one_node(
+                        child,
+                        child_indices_so_far + [i],
+                        child_numbers_so_far + [node.nbc],
+                    )
+                    for i, child in enumerate(node.children, start=1)
+                ],
+                [],
+            )
+            padded_and_concat = (
+                child_indices_so_far
+                + [0] * (self.grammar.max_depth - len(child_indices_so_far))
+                + child_numbers_so_far
+                + [0] * (self.grammar.max_depth - len(child_numbers_so_far))
+            )
+            return [padded_and_concat] + child_positions
+
+        return get_positions_for_one_node(self, [], [])
+
+    def to_dict(self) -> dict[str, Any]:
+        d = {self._id_key: self.id}
+        if self.children:
+            d[self._children_key] = [child.to_dict() for child in self.children]
+        if self.midi_start_index is not None:
+            d[self._start_key] = self.midi_start_index
+            d[self._end_key] = self.midi_last_index
+        return d
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any], grammar: Grammar) -> Self:
+        return cls(
+            grammar=grammar,
+            id_=d[cls._id_key],
+            children=[cls.from_dict(child, grammar) for child in d.get(cls._children_key, [])],
+            midi_start_index=d.get(cls._start_key),
+            midi_last_index=d.get(cls._end_key),
         )
 
-    def get_production_rule_ids(self) -> list[int]:
+    def save(self, file_path: Path) -> None:
+        with open(file_path, "w") as f:
+            json.dump(self.to_dict(), f, separators=(",", ":"))
+
+    @classmethod
+    def load(cls, file_path: Path, grammar: Grammar) -> Self:
+        with open(file_path, "r") as f:
+            return cls.from_dict(json.load(f), grammar)
+
+    @classmethod
+    def from_qparse(
+        cls,
+        tree: pyqparse.LRT,
+        grammar: Grammar,
+        flatten_measures: bool = True,
+    ) -> Self:
+        if tree.fail():
+            raise ValueError(f"Parsing failed in {tree}")
+        id_ = grammar.simplify_rule(tree.production())
+        children = [
+            cls.from_qparse(tree.child(i), grammar=grammar, flatten_measures=False)
+            for i in range(tree.nbc())
+        ]
+        has_midi_events = tree.has_jam()
+        midi_start_index = tree.label_first() if has_midi_events else None
+        midi_last_index = midi_start_index + tree.label_length() if has_midi_events else None
+        root_node = cls(
+            grammar=grammar,
+            id_=id_,
+            children=children,
+            midi_start_index=midi_start_index,
+            midi_last_index=midi_last_index,
+        )
+        root_node._qparse_tree = tree
+        root_node._qparse_id = tree.production()
+        # Gather all measures under the root node (instead of deeper and deeper children)
+        if flatten_measures and root_node.id == grammar.SIMPLE_MEASURE_SPLIT_RULE.simple_id:
+            measures = []
+            current_node = root_node
+            while current_node.id == grammar.SIMPLE_MEASURE_SPLIT_RULE.simple_id:
+                assert (
+                    len(current_node.children) == 2
+                ), f"Measure split nodes should have 2 children ({len(root_node.children)} found)."
+                measures.append(current_node.children[0])
+                current_node = current_node.children[1]
+            root_node.children = measures
+        return root_node
+
+    def to_string_top_down(self):
         """
-        Get the production rule IDs of the tree.
-        :return: List of production rule IDs.
-        """
-        return self.traverse_tree(lambda n: n.production_rule_id)
-
-    def get_production_rule_ids_and_midi_indices(
-        self,
-        simplified_ids: bool = True,
-    ) -> list[tuple[int, tuple[int, int] | None]]:
-        """
-        Get the production rule IDs and MIDI indices of the tree.
-        :return: List of tuples (production rule ID, MIDI indices).
+        Get a string representation of the tree in a top-down fashion.
+        Adapted from https://stackoverflow.com/questions/15675261/displaying-a-tree-in-ascii
+        :return: the string representation of the tree.
         """
 
-        def get_info_for_one_node(node: Self) -> tuple[int, tuple[int, int] | None]:
-            label_slice = (
-                (node.midi_start_index, node.midi_last_index) if node.has_midi_events else None
-            )
-            id_ = (
-                node.production_rule_id
-                if not simplified_ids
-                else self.grammar.simplify_rule(node.production_rule_id)
-            )
-            return id_, label_slice
+        def block_width(block):
+            try:
+                return block.index("\n")
+            except ValueError:
+                return len(block)
 
-        return self.traverse_tree(get_info_for_one_node)
+        def stack_str_blocks(blocks):
+            """Takes a list of multiline strings, and stacks them horizontally.
 
-    def print_tree(self, indent=0, is_last_child=False):
-        prefix = "│  " * indent
-        if is_last_child:
-            print(prefix + "└─", self.production_rule_id)
-            prefix = "   " * indent
-        else:
-            print(prefix + "├─", self.production_rule_id)
+            For example, given 'aaa\naaa' and 'bbbb\nbbbb', it returns
+            'aaa bbbb\naaa bbbb'.  As in:
 
-        for i, child in enumerate(self.children):
-            next_indent = indent + 1
-            is_last = i == len(self.children) - 1
-            child.print_tree(next_indent, is_last)
+            'aaa  +  'bbbb   =  'aaa bbbb
+             aaa'     bbbb'      aaa bbbb'
 
-    def to_expanded_tree_string(
-        self,
-        display_midi_indices: bool = False,
-        simplified_ids: bool = False,
-    ) -> str:
-        """
-        Get a string representation of the tree.
-        :param display_midi_indices: Whether to display the MIDI indices after the production rule.
-        :param simplified_ids: Whether to display the simplified IDs.
-        :return: String representation of the tree.
-        """
+            Each block must be rectangular (all lines are the same length), but blocks
+            can be different sizes.
+            """
 
-        def recursive_part(
-            node: Self,
-            prefix: str = "",
-            is_last: bool = False,
-        ):
-            id_ = (
-                node.production_rule_id
-                if not simplified_ids
-                else self.grammar.simplify_rule(node.production_rule_id)
-            )
-            string = prefix + ("└─ " if is_last else "├─ ") + str(id_)
-            if node.is_measure_split:
-                string = str(id_)
-                prefix = ""
-            if display_midi_indices and node.is_terminal:
-                if not node.is_last:
-                    string += f"  [{node.midi_start_index}-{node.midi_last_index}]"
+            builder = []
+            block_lens = [block_width(bl) for bl in blocks]
+            split_blocks = [bl.split("\n") for bl in blocks]
+
+            import itertools
+
+            for line_list in itertools.zip_longest(*split_blocks, fillvalue=None):
+                for i, line in enumerate(line_list):
+                    if line is None:
+                        builder.append(" " * block_lens[i])
+                    else:
+                        builder.append(line)
+                    if i != len(line_list) - 1:
+                        builder.append(" ")  # Padding
+                builder.append("\n")
+
+            return "".join(builder[:-1])
+
+        name = str(self.id)
+
+        if not self.children:
+            return name
+
+        child_strs = [child.to_string_top_down() for child in self.children]
+        child_widths = [block_width(s) for s in child_strs]
+
+        # How wide is this block?
+        display_width = max(len(name), sum(child_widths) + len(child_widths) - 1)
+
+        # Determines midpoints of child blocks
+        child_midpoints = []
+        child_end = 0
+        for width in child_widths:
+            child_midpoints.append(child_end + (width // 2))
+            child_end += width + 1
+
+        # Builds up the brace, using the child midpoints
+        brace_builder = []
+        for i in range(display_width):
+            if i < child_midpoints[0] or i > child_midpoints[-1]:
+                brace_builder.append(" ")
+            elif i in child_midpoints:
+                if i == child_midpoints[0]:
+                    brace_builder.append("┌")
+                elif i == child_midpoints[-1]:
+                    brace_builder.append("┐")
                 else:
-                    string += f" [END OF TRACK]"
-            num_children = len(node)
-            for i in range(num_children):
-                child = node[i]
-                new_prefix = prefix + ("   " if is_last else "│  ")
-                is_last_child = i == num_children - 1
-                string += "\n" + recursive_part(child, new_prefix, is_last_child)
+                    brace_builder.append("┬")
+            else:
+                brace_builder.append("─")
+        brace = "".join(brace_builder)
+
+        name_str = "{:^{}}".format(name, display_width)
+        below = stack_str_blocks(child_strs)
+
+        return name_str + "\n" + brace + "\n" + below
+
+    def to_string_left_right(self) -> str:
+        """
+        Get a string representation of the tree in a left-right fashion.
+
+        :return: the string representation of the tree.
+        """
+
+        def recursive_part(node: Self, prefix: str = "", is_last: bool = False):
+            if is_last:
+                new_prefix = prefix + "└─ "
+                next_prefix = prefix + "   "
+            else:
+                new_prefix = prefix + "├─ "
+                next_prefix = prefix + "│  "
+            string = new_prefix + str(node.id) + "\n"
+            for i, child in enumerate(node.children):
+                string += recursive_part(child, next_prefix, i == node.nbc - 1)
             return string
 
-        return recursive_part(self)
-
-    def dump_rules(self, file_path: Path) -> None:
-        """
-        Dump the production rule IDs and MIDI indices to a JSON file as a list of :
-        (production rule ID, (MIDI start index, MIDI last index)).
-        :param file_path: Path to the JSON file.
-        """
-        content = self.get_production_rule_ids_and_midi_indices()
-        with open(file_path, "w") as f:
-            json.dump(content, f, separators=(",", ":"))  # separators to remove spaces
-
-    def __str__(self):
-        return self.to_expanded_tree_string(display_midi_indices=True, simplified_ids=True)
-
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}(id={self.production_rule_id}, nbc={self.nbc},"
-            f" terminal={self.is_terminal}, tree={self._pyqparse_tree})"
-        )
-
-    def __len__(self):
-        return self.nbc
-
-    def __getitem__(self, item):
-        return self.children[item]
+        return recursive_part(self, is_last=True)
 
 
 # def read_rules(grammar_file: Path, additional_rules: dict[int, str] = None) -> dict[int, str]:
@@ -409,10 +458,10 @@ def build_scoring_env(
 
 
 if __name__ == "__main__":
-    # MIDI_FILE = Path("../groove_data/groove/drummer1/session1/1_funk_80_beat_4-4.mid")
-    MIDI_FILE = Path(
-        "/tmp/training_tests/processed/augmented_num=0/groove/drummer4/session1/3_jazz-klezmer_152_beat_4-4/3_jazz-klezmer_152_beat_4-4_variation=original.mid"
-    )
+    MIDI_FILE = Path("../groove_data/groove/drummer1/session1/1_funk_80_beat_4-4.mid")
+    # MIDI_FILE = Path(
+    #     "/tmp/training_tests/processed/augmented_num=0/groove/drummer4/session1/3_jazz-klezmer_152_beat_4-4/3_jazz-klezmer_152_beat_4-4_variation=original.mid"
+    # )
     GRAMMAR_FILE = Path("utils/grammar.wta")
 
     from pprint import pprint
@@ -428,6 +477,27 @@ if __name__ == "__main__":
     # scoring_env.export_MEI("/tmp/test.mei")
 
     raw_tree = scoring_env.best_tree(pyqparse.Model.DrumAgostini, 1)
-    tree = Node(raw_tree, grammar)
-    print(tree.to_expanded_tree_string(simplified_ids=True))
-    breakpoint()
+    # tree = Node(raw_tree, grammar)
+    # print(tree.to_expanded_tree_string(simplified_ids=True))
+    # pprint(tree.get_tree_as_dict(simplified_ids=True, flatten_measures=True), sort_dicts=False)
+    # tree.dump_tree(Path("/tmp/tree.json"))
+    tree = Node.from_qparse(raw_tree, grammar, flatten_measures=True)
+    pprint(tree.to_dict(), sort_dicts=False)
+    tree.save(Path("/tmp/tree.json"))
+    print(tree.to_string_top_down())
+    print(tree.to_string_left_right())
+    pprint(tree.children)
+    new_tree = Node.load(Path("/tmp/tree.json"), grammar)
+
+    assert tree.to_dict() == new_tree.to_dict()
+
+    import pickle
+
+    with open("/tmp/tree.pkl", "wb") as f:
+        pickle.dump(tree, f)
+    with open("/tmp/tree.pkl", "rb") as f:
+        new_tree = pickle.load(f)
+
+    # print(tree._qparse_tree)
+    assert tree.to_dict() == new_tree.to_dict()
+    # breakpoint()

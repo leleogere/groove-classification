@@ -11,12 +11,12 @@ import torch
 import pyqparse
 
 from data_processing.track_processors_base import TrackProcessor
+from utils.grammar import Node
 from utils.utils import Note
 from utils.utils import ProcessedTrack
 from utils.utils import Track
 from utils.constants import DRUMS
 from utils.grammar import Grammar
-from utils.grammar import Node
 from utils.utils import load_and_validate_midi_file
 
 
@@ -28,7 +28,13 @@ RuleWithIndices = tuple[int, tuple[int, int] | None]
 class GrammarTrackProcessor(TrackProcessor):
     short_name = "grammar"
 
-    def __init__(self, weights_file: Path, use_tempo: bool = True, sequences_dir: Path = None):
+    def __init__(
+        self,
+        weights_file: Path,
+        use_tempo: bool = True,
+        sequences_dir: Path = None,
+        tree_positional_encoding: bool = False,
+    ):
         super().__init__(use_tempo=use_tempo)
         self.grammar_file = weights_file
         self.grammar = Grammar.from_file(self.grammar_file)
@@ -39,15 +45,16 @@ class GrammarTrackProcessor(TrackProcessor):
         if sequences_dir is None:
             sequences_dir = Path(tempfile.mkdtemp(prefix="production_rules_sequences_"))
         self.sequences_dir = sequences_dir
+        self.tree_positional_encoding = tree_positional_encoding
         self.memory = joblib.Memory(self.sequences_dir, verbose=0)
-        self.track_to_sequence = self.memory.cache(self.track_to_sequence, ignore=["self"])
-        self.sequence_to_tensor = self.memory.cache(self.sequence_to_tensor, ignore=["self"])
+        self.track_to_tree = self.memory.cache(self.track_to_tree, ignore=["self"])
+        self.tree_to_tensor = self.memory.cache(self.tree_to_tensor, ignore=["self"])
 
-    def track_to_sequence(
+    def track_to_tree(
         self,
         track: Track,
         none_if_parsing_failed: bool = False,
-    ) -> list[RuleWithIndices] | None:
+    ) -> Node | None:
         """
         Convert a track to a sequence of rules and indices.
 
@@ -95,23 +102,28 @@ class GrammarTrackProcessor(TrackProcessor):
                 return None
             else:
                 raise e
-        sequence = json.loads(json_tree.stdout)
-        return sequence
+        tree = Node.from_dict(json.loads(json_tree.stdout), self.grammar)
+        return tree
 
-    def sequence_to_tensor(self, sequence: list[RuleWithIndices], track: Track) -> torch.Tensor:
+    def tree_to_tensor(self, tree: Node, track: Track) -> torch.Tensor:
         """
         Convert a list of rules and with MIDI event indices to a tensor. The first n rows contain
         the OHE rules, and the next m rows contain the HE drums pitches (only for terminal rules).
 
-        :param sequence: Sequence of rules and indices.
+        :param tree: Tree of rules.
         :param track: Track to get the notes from.
         :param rules: List of production rules.
         :param indices: List of indices in the format [start, end).
         :return: Tensor of shape (len(rules), num_simplified_rules + num_drum_pitches).
         """
-        rules, indices = zip(*sequence)
-        if len(indices) != len(rules):
-            raise ValueError("Length of rules and indices must be the same.")
+        rules_and_indices = tree.traverse(
+            lambda node: (
+                node.id,
+                (node.midi_start_index, node.midi_last_index) if node.has_midi_events else None,
+            )
+        )
+        rules, indices = zip(*rules_and_indices)
+        assert len(indices) == len(rules), "Length of rules and indices must be the same."
         # Convert [start, end) to range(start, end)
         indices = map(
             lambda start_end: range(start_end[0], start_end[1]) if start_end is not None else [],
@@ -131,14 +143,16 @@ class GrammarTrackProcessor(TrackProcessor):
     def track_to_tensor_with_positions(
         self,
         track: Track,
-        none_if_parsing_failed: bool = False,
     ) -> torch.Tensor | None:
-        if "sequence" in track.other_data:
-            sequence = track.other_data["sequence"]
+        if "tree" in track.other_data:
+            tree = Node.from_dict(track.other_data["tree"], self.grammar)
         else:
-            sequence = self.track_to_sequence(track, none_if_parsing_failed=none_if_parsing_failed)
-        positions = list(range(len(sequence)))  # TODO: tree positional encoding?
-        return self.sequence_to_tensor(sequence, track), positions
+            tree = self.track_to_tree(track)
+        if self.tree_positional_encoding:
+            positions = tree.get_positions()
+        else:
+            positions = tree.traverse(lambda node: node.id)
+        return self.tree_to_tensor(tree, track), positions
 
     # def export_last_parsed_file_to_svg(self, path: Path, delete_mei: bool = True):
     #     # Export MEI file to /tmp
@@ -253,11 +267,18 @@ class GrammarTrackProcessor(TrackProcessor):
 
 if __name__ == "__main__":
     from utils.utils import parse_bpm_from_file_name, parse_time_signature_from_file_name
+    import matplotlib.pyplot as plt
 
-    # MIDI_PATH = Path("../groove_data/groove/drummer1/session1")
-    # midi_paths = list(MIDI_PATH.rglob("*_funk_*.mid"))
-    MIDI_PATH = Path("/tmp/augmented_tracks")
-    midi_paths = list(MIDI_PATH.rglob("*.mid"))
+    MIDI_PATH = Path("../groove_data/groove/drummer1/session1")
+    # midi_paths = list(MIDI_PATH.rglob("*_funk_80_*.mid"))[:1]
+    midi_paths = [
+        Path(
+            # "../groove_data/split_measures=4/groove/drummer1/session1/1_funk_80_beat_4-4/1_funk_80_beat_4-4_variation=original/1_funk_80_beat_4-4_variation=original_startbar=04_numbars=4.mid",
+            "../groove_data/split_measures=4/groove/drummer1/session1/1_funk_80_beat_4-4/1_funk_80_beat_4-4_variation=original/1_funk_80_beat_4-4_variation=original_startbar=08_numbars=4.mid",
+        )
+    ]
+    # MIDI_PATH = Path("/tmp/augmented_tracks")
+    # midi_paths = list(MIDI_PATH.rglob("*.mid"))
     print(midi_paths)
     print(f"{len(midi_paths) = }")
     tracks = [
@@ -270,11 +291,27 @@ if __name__ == "__main__":
     ]
     GRAMMAR_FILE = Path("utils/grammar.wta")
 
-    processor = GrammarTrackProcessor(GRAMMAR_FILE, sequences_dir=None)
+    processor = GrammarTrackProcessor(
+        GRAMMAR_FILE,
+        sequences_dir=None,
+        tree_positional_encoding=True,
+    )
+    from pprint import pprint
+
+    pprint(processor.grammar.basic_rules)
 
     for track in tracks:
-        sequence = processor.track_to_sequence(track, none_if_parsing_failed=True)
-        print(sequence)
-        if sequence is not None:
-            tensor = processor.sequence_to_tensor(sequence, track)
-            print(tensor)
+        tree = processor.track_to_tree(track, none_if_parsing_failed=True)
+        print(tree.to_string_top_down())
+        print(tree.to_string_left_right())
+        if tree is not None:
+            tensor, positions = processor.track_to_tensor_with_positions(track)
+            print(torch.tensor(positions).shape)
+
+            # subplots with colorbars
+            fig, axs = plt.subplots(2)
+            rules = axs[0].imshow(tensor.T, aspect="auto", interpolation="nearest")
+            plt.colorbar(rules)
+            pe = axs[1].imshow(torch.tensor(positions).T, aspect="auto", interpolation="nearest")
+            plt.colorbar(pe, ticks=range(processor.grammar.max_depth))
+            plt.show()

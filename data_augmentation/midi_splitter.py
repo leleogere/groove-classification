@@ -9,6 +9,7 @@ import pretty_midi as pm
 from tqdm import tqdm
 
 from data_processing.track_processor_grammar import GrammarTrackProcessor
+from utils.grammar import Node
 from utils.utils import ProcessedTrack
 from utils.utils import Track
 from utils.utils import find_common_root
@@ -382,15 +383,10 @@ class RuleSequenceSplitter(SplitterAbstract):
         output_dir: Path,
         skip_existing: bool = True,
     ) -> list[Track]:
-        measure_split_id = self.grammar_processor.grammar.SIMPLE_MEASURE_SPLIT_RULE.simple_id
-        sequence = self.grammar_processor.track_to_sequence(track, none_if_parsing_failed=True)
-        if sequence is None:
+        tree = self.grammar_processor.track_to_tree(track, none_if_parsing_failed=True)
+        if tree is None:
             return []
-        rules, midi_indices = zip(*sequence)
-        measure_indices = np.argwhere(np.array(rules) == measure_split_id).flatten().tolist() + [
-            len(rules)
-        ]
-        num_measures = len(measure_indices) - 1
+        num_measures = len(tree.children)
 
         # Create chunks
         formatting_number_width = len(str(num_measures))
@@ -401,15 +397,15 @@ class RuleSequenceSplitter(SplitterAbstract):
             range_ = range(0, num_measures, self.num_measures_per_chunk)
         if range_.stop > num_measures:
             breakpoint()
-        for chunk_idx, current_index in enumerate(range_):
-            start_measure_idx = current_index
-            end_measure_idx = min(current_index + self.num_measures_per_chunk, num_measures)
-            start, end = measure_indices[start_measure_idx], measure_indices[end_measure_idx]
-            chunk_rules = rules[start:end]
-            chunk_indices = midi_indices[start:end]
+        for chunk_idx, measure_index in enumerate(range_):
+            current_chunk = Node(
+                grammar=tree.grammar,
+                id_=tree.id,
+                children=tree.children[measure_index : measure_index + self.num_measures_per_chunk],
+            )
             chunk_name = _chunk_filename(
                 original_midi_path=track.midi_path,
-                start_bar=current_index,
+                start_bar=measure_index,
                 num_bars=self.num_measures_per_chunk,
                 formatting_number_width=formatting_number_width,
             )
@@ -417,7 +413,7 @@ class RuleSequenceSplitter(SplitterAbstract):
                 track,
                 other_data={
                     "chunk_name": chunk_name,
-                    "sequence": list(zip(chunk_rules, chunk_indices)),
+                    "tree": current_chunk.to_dict(),
                 },
             )
             chunks.append(chunk)
