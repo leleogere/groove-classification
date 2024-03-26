@@ -12,6 +12,19 @@ class PianoRollTrackProcessor(TrackProcessor):
         super().__init__(use_tempo=use_tempo)
         self.resolution = resolution
 
+    def str_state(self) -> str:
+        """String representation of the state of the track processor.
+
+        :return: String representation of the state of the track processor.
+        """
+        return "_-_".join(
+            [
+                self.name,
+                f"use_tempo={self.use_tempo}",
+                f"resolution={self.resolution}",
+            ]
+        )
+
     def track_to_tensor_with_positions(self, track: Track):
         notes = track.notes()
         start = notes[0].start

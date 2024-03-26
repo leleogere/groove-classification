@@ -29,6 +29,13 @@ class TrackProcessor:
         """
         return self.__class__.__name__
 
+    def str_state(self) -> str:
+        """String representation of the state of the track processor.
+
+        :return: String representation of the state of the track processor.
+        """
+        return "_-_".join([self.name, f"use_tempo={self.use_tempo}"])
+
     def track_to_tensor_with_positions(
         self,
         track: Track,

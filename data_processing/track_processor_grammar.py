@@ -44,11 +44,25 @@ class GrammarTrackProcessor(TrackProcessor):
         # self.scoring_env.set_debug(False)
         if sequences_dir is None:
             sequences_dir = Path(tempfile.mkdtemp(prefix="production_rules_sequences_"))
-        self.sequences_dir = sequences_dir
         self.tree_positional_encoding = tree_positional_encoding
+        self.sequences_dir = sequences_dir / self.str_state()
         self.memory = joblib.Memory(self.sequences_dir, verbose=0)
         self.track_to_tree = self.memory.cache(self.track_to_tree, ignore=["self"])
         self.tree_to_tensor = self.memory.cache(self.tree_to_tensor, ignore=["self"])
+
+    def str_state(self) -> str:
+        """String representation of the state of the track processor.
+
+        :return: String representation of the state of the track processor.
+        """
+        return "_-_".join(
+            [
+                self.name,
+                f"use_tempo={self.use_tempo}",
+                f"grammar_file={str(self.grammar_file).replace(os.sep, '-')}",
+                f"tree_positional_encoding={self.tree_positional_encoding}",
+            ]
+        )
 
     def track_to_tree(
         self,
