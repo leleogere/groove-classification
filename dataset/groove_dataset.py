@@ -72,10 +72,12 @@ class GrooveMidiDataset(TrackDataset):
         self,
         path: Path,
         filter_tracks: Callable[[Track], bool] | None = None,
+        override_metadata: Path | None = None,
         track_processor: TrackProcessor | None = None,
     ):
         self.path = path
-        with open(self.path / self._metadata_file_name) as f:
+        metadata = override_metadata or self.path / self._metadata_file_name
+        with open(self.path / metadata) as f:
             self._metadata = list(csv.DictReader(f))
         super().__init__(
             [
@@ -118,10 +120,9 @@ class GrooveMidiModule(L.LightningDataModule):
         processed_data_path: Path = Path(tempfile.gettempdir()),
         batch_size: int = 128,
         track_processor: TrackProcessor | None = None,
-        min_tracks_per_label: int = 20,
         augmentor: MidiAugmentor | None = None,
         splitter: Splitter | None = None,
-        filter_tracks: Callable[[Track], bool] | None = None,
+        override_metadata: Path = None,
         n_jobs: int = 1,
     ):
         super().__init__()
@@ -129,10 +130,9 @@ class GrooveMidiModule(L.LightningDataModule):
         self.processed_data_path = processed_data_path
         self.batch_size = batch_size
         self.track_processor = track_processor
-        self.min_tracks_per_label = min_tracks_per_label
         self.augmentor = augmentor
         self.splitter = splitter
-        self.filter_tracks = filter_tracks if filter_tracks is not None else lambda x: True
+        self.override_metadata = override_metadata
         self.n_jobs = n_jobs
 
         # Other attributes
@@ -181,7 +181,8 @@ class GrooveMidiModule(L.LightningDataModule):
         for split in split_keys:
             datasets[split] = GrooveMidiDataset(
                 dataset_path,
-                filter_tracks=lambda x: x.split == split and self.filter_tracks(x),
+                filter_tracks=lambda t: t.split == split,
+                override_metadata=self.override_metadata,
                 track_processor=self.track_processor,
             )
             for track in datasets[split].tracks:
@@ -189,22 +190,12 @@ class GrooveMidiModule(L.LightningDataModule):
         # Write a first version of the label infos in the dataset folder
         self.export_label_infos(dataset_path / self._labels_file_name)
 
-        # Filter labels with less than min_tracks_per_label tracks in the train set
-        self.unique_labels = sorted(
-            [
-                label
-                for label, infos in self.label_infos.items()
-                if infos[train_key]["tracks"] >= self.min_tracks_per_label
-            ]
-        )
+        # Create label indexer
+        self.unique_labels = sorted([label for label, infos in self.label_infos.items()])
         self.label_to_id = {label: i for i, label in enumerate(self.unique_labels)}
         self.id_to_label = {i: label for label, i in self.label_to_id.items()}
         for split in split_keys:
-            datasets[split].tracks = list(
-                filter(lambda x: x.label in self.unique_labels, datasets[split].tracks)
-            )
             for track in datasets[split].tracks:
-                self.label_infos[track.label][split]["filtered"] += 1
                 track.label_idx = self.label_to_id[track.label]
 
         # Augment dataset if needed

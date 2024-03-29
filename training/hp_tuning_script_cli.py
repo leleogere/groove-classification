@@ -28,10 +28,6 @@ class HyperParameter:
     values: list
 
     def __post_init__(self):
-        print(self.name, self.values)
-        import time
-
-        time.sleep(0.01)
         if not all(isinstance(v, self.type) or v is None for v in self.values):
             raise ValueError(f"All values must be of the same type: {type(self.values[0])}")
 
@@ -61,10 +57,11 @@ def split_parameter_callback(type_: Callable = str, sep: str = ",", strip: bool 
 
 
 # fmt: off
-@click.command(help="Hyperparameter tuning script. Except --start-at, all options allow to specify multiple values separated by a comma (no spaces).")
+@click.command(help="Hyperparameter tuning script. Except --start-at and --override-metadata, all options allow to specify multiple values separated by a comma (no spaces).")
 @click.option("--data-path", callback=split_parameter_callback(click.Path(dir_okay=True, file_okay=False, readable=True, writable=True, executable=True, path_type=Path)), required=True, help="Path to the dataset.", metavar='PATH')
 @click.option("--processed-data-path", callback=split_parameter_callback(click.Path(dir_okay=True, file_okay=False, readable=True, writable=True, executable=True, path_type=Path)), required=True, help="Path to store the processed data.", metavar='PATH')
 @click.option("--results-path", callback=split_parameter_callback(click.Path(dir_okay=True, file_okay=False, readable=True, writable=True, executable=True, path_type=Path)), required=True, help="Path to the results.", metavar='PATH')
+@click.option("--override-metadata", type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path), help="Path to the metadata file to override the default one.", metavar='PATH')
 @click.option("--start-at", type=int, default=0, help="Index of the first hyperparameter set to run.", metavar='INT')
 @click.option("--track-processor-type", callback=split_parameter_callback(TrackProcessors.from_str), default=",".join([p.name for p in TrackProcessors]), help=f"Type of track processor ({', '.join([p.name for p in TrackProcessors])}).", metavar='STR')
 @click.option("--track-processor-pianoroll-resolution", callback=split_parameter_callback(int), default="30,50", help="Pianoroll resolution.", metavar='INT')
@@ -90,46 +87,22 @@ def split_parameter_callback(type_: Callable = str, sep: str = ",", strip: bool 
 @click.option("--num-augmentations", callback=split_parameter_callback(int), default="0,10", help="Number of augmentations.", metavar='INT')
 # fmt: on
 def main(
-    data_path: Path,
-    processed_data_path: Path,
-    results_path: Path,
-    track_processor_type: TrackProcessors,
-    track_processor_pianoroll_resolution: int,
-    track_processor_grammar_weights_file: Path,
-    track_processor_grammar_tree_positional_encoding: bool,
-    model_type: GenreClassifierType,
-    model_lstm_hidden_size: int,
-    model_lstm_num_layers: int,
-    model_transformer_num_heads: int,
-    model_transformer_num_features_per_head: int,
-    model_transformer_feedforward_dim: int,
-    model_transformer_num_layers: int,
-    model_dropout_rate: float,
-    training_learning_rate: float,
-    training_l2_regularization: float,
-    training_batch_size: int,
-    training_num_epochs: int,
-    training_patience: int,
-    num_measures_per_chunk: int,
-    chunk_overlap: bool,
-    use_imfw: bool,
-    use_tempo: bool,
-    num_augmentations: int,
     start_at: int,
+    override_metadata: Path,
+    **params,
 ):
-    _, _, _, params = inspect.getargvalues(inspect.currentframe())
-    print(params)
+    for pname, pvalue in params.items():
+        print(f"{pname}: {pvalue}")
     hparams = [HyperParameter(k, v) for k, v in params.items() if k not in ["start_at"]]
 
-    domain = list(
+    domain = (
         dict(zip(map(lambda hp: hp.name, hparams), x))
         for x in itertools.product(*map(lambda hp: hp.values, hparams))
     )  # See https://stackoverflow.com/questions/5228158/cartesian-product-of-a-dictionary-of-lists/40623158
-    print(f"Number of hyperparameter sets before filtering: {len(domain)}")
 
     def conditional_set_none(
         hps: dict,
-        invalid_rules: list[tuple[tuple[str, str], str]] = None,
+        invalid_rules: list[tuple[tuple[str, str], str]],
         inplace: bool = True,
     ) -> dict:
         """
@@ -142,17 +115,6 @@ def main(
         :param inplace: Whether to modify the input dictionary or return a new one
         :return: New dictionary of hyperparameters with some values set to None
         """
-        if invalid_rules is None:
-            invalid_rules = [
-                # Pop transformer parameters for LSTM model
-                (("model_type", GenreClassifierType.lstm), r"model_transformer_"),
-                # Pop LSTM parameters for transformer model
-                (("model_type", GenreClassifierType.transformer), "model_lstm_"),
-                # Pop pianoroll parameters for relative processor
-                (("track_processor_type", TrackProcessors.relative), r"track_processor_pianoroll_"),
-                # Pop pianoroll parameters for grammar processor
-                (("track_processor_type", TrackProcessors.grammar), r"track_processor_pianoroll_"),
-            ]
         if not inplace:
             hps = copy.deepcopy(hps)
         for (key_to_filter_on, value_to_filter_on), pattern_to_pop in invalid_rules:
@@ -162,8 +124,41 @@ def main(
                     hps[key_to_pop] = None
         return hps
 
+    invalid_rules = [
+        # Pop transformer parameters for LSTM model
+        (("model_type", GenreClassifierType.lstm), r"model_transformer_"),
+        # Pop LSTM parameters for transformer model
+        (("model_type", GenreClassifierType.transformer), "model_lstm_"),
+        # Pop parameters non-relevant to the track processor
+        # For each processor p1:
+        #   For each processor p2 != p1:
+        #     Create a rule that set to None the parameters of p2 for p1
+        #     (e.g. for p1=relative, set to None the pianoroll and grammar parameters)
+        #     ((track_processor_type, p1), r"track_processor_{p2}")
+        *sum(
+            [
+                [
+                    (
+                        ("track_processor_type", selected_tp.name),
+                        f"track_processor_{other_tp.name}",
+                    )
+                    for other_tp in TrackProcessors
+                    if other_tp != selected_tp
+                ]
+                for selected_tp in TrackProcessors
+            ],
+            [],
+        ),
+        # Pop tree positional encoding for LSTM models
+        (
+            ("model_type", GenreClassifierType.lstm),
+            "track_processor_grammar_tree_positional_encoding",
+        ),
+    ]
+
     # Set to None useless hyperparameters
-    domain = [conditional_set_none(hps, inplace=True) for hps in domain]
+    domain = [conditional_set_none(hps, invalid_rules, inplace=True) for hps in domain]
+    print(f"Number of hyperparameter sets before decuplication: {len(domain)}")
     # Remove duplicates (using fact that keys are unique in dict)
     hashes = {hash(frozenset(trial.items())): trial for trial in domain}
     domain = list(hashes.values())
@@ -181,10 +176,7 @@ def main(
     for i, cur_hparams in enumerate(domain):
         if i < start_at:
             continue
-        training_params = ScriptParameters(
-            min_tracks_per_label=30,
-            **cur_hparams,
-        )
+        training_params = ScriptParameters(override_metadata=override_metadata, **cur_hparams)
         print("=" * 80)
         print(f"Run {i + 1}/{len(domain)}")
         print(

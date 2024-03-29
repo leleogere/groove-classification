@@ -58,10 +58,9 @@ def main(params: ScriptParameters):
         processed_data_path=params.processed_data_path,
         batch_size=params.training_batch_size,
         track_processor=track_processor,
-        min_tracks_per_label=params.min_tracks_per_label,
         augmentor=augmentor,
         splitter=splitter,
-        filter_tracks=filter_if_grammar,
+        override_metadata=params.override_metadata,
         n_jobs=(
             int(0.75 * os.cpu_count())
             # if params.track_processor_type != TrackProcessors.grammar

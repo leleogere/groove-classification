@@ -12,6 +12,7 @@ class ScriptParameters:
     data_path: Path
     processed_data_path: Path
     results_path: Path
+    override_metadata: Path
     # Training parameters
     training_batch_size: int
     training_num_epochs: int
@@ -37,7 +38,6 @@ class ScriptParameters:
     chunk_overlap: bool
     num_augmentations: int
     # Others parameters
-    min_tracks_per_label: int
     use_imfw: bool
     use_tempo: bool
 
@@ -84,6 +84,12 @@ def parse_args() -> ScriptParameters:
         type=Path,
         required=True,
         help="Path to the results.",
+    )
+    data_group.add_argument(
+        "--override-metadata",
+        type=Path,
+        help="Path to a new filtered info.csv metadata file of the Groove MIDI Dataset.",
+        default=None,
     )
 
     # Training group
@@ -255,6 +261,7 @@ def parse_args() -> ScriptParameters:
         data_path=args.data_path,
         processed_data_path=args.processed_data_path,
         results_path=args.results_path,
+        override_metadata=args.override_metadata,
         training_batch_size=args.training_batch_size,
         training_num_epochs=args.training_num_epochs,
         training_patience=args.training_patience,
@@ -275,7 +282,6 @@ def parse_args() -> ScriptParameters:
         num_measures_per_chunk=args.num_measures_per_chunk,
         chunk_overlap=args.chunk_overlap,
         num_augmentations=args.num_augmentations,
-        min_tracks_per_label=args.min_tracks_per_label,
         use_imfw=args.use_imfw,
         use_tempo=args.use_tempo,
     )
