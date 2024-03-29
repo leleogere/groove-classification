@@ -16,6 +16,7 @@ from utils.confusion_matrix import confusion_matrix_pipeline
 class GenreClassifier(L.LightningModule):
     _train_key = "train"
     _val_key = "val"
+    _test_key = "test"
 
     def __init__(
         self,
@@ -104,6 +105,9 @@ class GenreClassifier(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         return self.common_step(batch, self._val_key)
 
+    def test_step(self, batch, batch_idx):
+        return self.common_step(batch, self._test_key)
+
     def on_common_epoch_end(self, key: str):
         y_true = torch.cat(self.accumulated_predictions[key]["y_true"], dim=0)
         y_pred = torch.cat(self.accumulated_predictions[key]["y_pred"], dim=0)
@@ -131,6 +135,9 @@ class GenreClassifier(L.LightningModule):
     def on_validation_epoch_end(self):
         self.on_common_epoch_end(self._val_key)
 
+    def on_test_epoch_end(self):
+        self.on_common_epoch_end(self._test_key)
+
     # def on_train_start(self) -> None:
     #     # Log hyperparameters with first dummy metrics in order for them to appear in TensorBoard
     #     to_log = {}
@@ -145,7 +152,7 @@ class GenreClassifier(L.LightningModule):
 
         if key is None:
             self.accumulated_predictions = {
-                k: default_dict() for k in [self._train_key, self._val_key]
+                k: default_dict() for k in [self._train_key, self._val_key, self._test_key]
             }
         else:
             self.accumulated_predictions[key] = default_dict()

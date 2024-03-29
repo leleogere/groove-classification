@@ -174,6 +174,7 @@ def main(params: ScriptParameters):
         devices=1,
     )
     trainer.fit(model, datamodule=groove_module)
+    trainer.test(model, datamodule=groove_module)
 
     logger.experiment.finish()
 
