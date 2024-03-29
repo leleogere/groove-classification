@@ -278,6 +278,18 @@ class Node:
             root_node.children = measures
         return root_node
 
+    @classmethod
+    def from_midi(
+        cls,
+        midi_path: Path,
+        tempo: int,
+        time_signature: tuple[int, int],
+        grammar_file: Path,
+    ) -> Self:
+        scoring_env = build_scoring_env(midi_path, tempo, time_signature, grammar_file)
+        raw_tree = scoring_env.best_tree(pyqparse.Model.DrumAgostini, 1)
+        return cls.from_qparse(raw_tree, Grammar.from_file(grammar_file))
+
     def to_string_top_down(self):
         """
         Get a string representation of the tree in a top-down fashion.
