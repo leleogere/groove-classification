@@ -134,13 +134,13 @@ def main(
         #   For each processor p2 != p1:
         #     Create a rule that set to None the parameters of p2 for p1
         #     (e.g. for p1=relative, set to None the pianoroll and grammar parameters)
-        #     ((track_processor_type, p1), r"track_processor_{p2}")
+        #     ((track_processor_type, p1), r"track_processor_{p2}_")
         *sum(
             [
                 [
                     (
-                        ("track_processor_type", selected_tp.name),
-                        f"track_processor_{other_tp.name}",
+                        ("track_processor_type", selected_tp),
+                        f"track_processor_{other_tp.name}_",
                     )
                     for other_tp in TrackProcessors
                     if other_tp != selected_tp
