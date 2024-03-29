@@ -149,7 +149,7 @@ class GrooveMidiModule(L.LightningDataModule):
                 ignore=["self"],
             )
 
-    def prepare_data(self) -> None:  # TODO: HERE
+    def prepare_data(self) -> None:
         success_file = self.path / self._success_file_name
         # Download dataset
         if not success_file.exists():
