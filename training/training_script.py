@@ -143,10 +143,10 @@ def main(params: ScriptParameters):
 
     # Prepare callbacks
     early_stopping = callbacks.EarlyStopping(
-        monitor="val/loss",
+        monitor="val/f1_macro",
+        mode="max",
         min_delta=0.00,
         patience=params.training_patience,
-        mode="min",
     )
     params.results_path.mkdir(parents=True, exist_ok=True)
     try:
