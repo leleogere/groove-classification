@@ -148,6 +148,15 @@ def main(params: ScriptParameters):
         min_delta=0.00,
         patience=params.training_patience,
     )
+    model_checkpoint = callbacks.ModelCheckpoint(
+        monitor="val/f1_macro",
+        mode="max",
+        save_top_k=3,
+        dirpath=params.results_path,
+        filename="{epoch}-vf1={val/f1_macro:.2f}-vloss={val/loss:.2f}",
+        auto_insert_metric_name=False,
+    )
+
     params.results_path.mkdir(parents=True, exist_ok=True)
     try:
         project = os.environ["WANDB_PROJECT"]
@@ -169,7 +178,7 @@ def main(params: ScriptParameters):
     trainer = L.Trainer(
         max_epochs=params.training_num_epochs,
         logger=logger,
-        callbacks=[early_stopping],
+        callbacks=[early_stopping, model_checkpoint],
         devices=1,
     )
     trainer.fit(model, datamodule=groove_module)
