@@ -141,6 +141,17 @@ def main(params: ScriptParameters):
         hparams_to_log=params.to_serializable_dict(),
     )
 
+    # Prepare logger
+    try:
+        project = os.environ["WANDB_PROJECT"]
+    except KeyError:
+        raise KeyError("Please set the WANDB_PROJECT environment variable to your project name")
+    logger = loggers.WandbLogger(
+        save_dir=str(params.results_path),
+        project=project,
+        log_model=True,
+    )
+
     # Prepare callbacks
     early_stopping = callbacks.EarlyStopping(
         monitor="val/f1_macro",
@@ -152,24 +163,11 @@ def main(params: ScriptParameters):
         monitor="val/f1_macro",
         mode="max",
         save_top_k=3,
-        dirpath=params.results_path,
         filename="{epoch}-vf1={val/f1_macro:.2f}-vloss={val/loss:.2f}",
         auto_insert_metric_name=False,
     )
 
     params.results_path.mkdir(parents=True, exist_ok=True)
-    try:
-        project = os.environ["WANDB_PROJECT"]
-    except KeyError:
-        raise KeyError("Please set the WANDB_PROJECT environment variable to your project name")
-    logger = loggers.WandbLogger(
-        save_dir=str(params.results_path),
-        project=project,
-        log_model=True,
-    )
-    # logger_dir = Path(logger.save_dir)
-    # logger_dir.mkdir(parents=True, exist_ok=False)
-    # groove_module.export_label_infos(logger_dir / "label_infos.txt")
     print("Label infos:")
     print(groove_module.label_infos_to_string())
 
