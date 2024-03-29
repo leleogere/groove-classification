@@ -112,11 +112,11 @@ class GrammarTrackProcessor(TrackProcessor):
                 env=environ,
             )
         except subprocess.CalledProcessError as e:
-            print(f"Error in tree built from {track.midi_path}: {e.stderr.decode()}")
             if none_if_parsing_failed:
+                print(f"Error in tree built from {track.midi_path}: {e.stderr.decode()}")
                 return None
             else:
-                raise e
+                raise RuntimeError(f"Error in parsing {track.midi_path}: {e.stderr.decode()}")
         tree = Node.from_dict(json.loads(json_tree.stdout), self.grammar)
         return tree
 
