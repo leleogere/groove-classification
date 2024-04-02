@@ -104,6 +104,12 @@ class DrumList:
     def __len__(self):
         return len(self.drums)
 
+    def min_pitch(self):
+        return min([d.pitch for d in self.drums])
+
+    def max_pitch(self):
+        return max([d.pitch for d in self.drums])
+
 
 class Track:
     def __init__(

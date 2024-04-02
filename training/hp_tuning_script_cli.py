@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Callable
 
 import click
+import joblib
 import tabulate
 import torch
 
@@ -67,6 +68,8 @@ def split_parameter_callback(type_: Callable = str, sep: str = ",", strip: bool 
 @click.option("--track-processor-pianoroll-resolution", callback=split_parameter_callback(int), default="30,50", help="Pianoroll resolution.", metavar='INT')
 @click.option("--track-processor-grammar-weights-file", callback=split_parameter_callback(click.Path(exists=True, dir_okay=False, readable=True, path_type=Path)), default=None, help="Path to the weights file for the grammar processor.", metavar='PATH')
 @click.option("--track-processor-grammar-tree-positional-encoding", callback=split_parameter_callback(bool), default="True,False", help="Whether to use tree positional encoding for the grammar processor, or standard sequence positional encoding.", metavar='BOOL')
+@click.option("--track-processor-tokenizer-type", callback=split_parameter_callback(str), default="midilike,remi,tsd,structured", help=f"Type of tokenizer for the tokenizer track processor (midilike, remi, tsd, structured).", metavar='STR')
+@click.option("--track-processor-tokenizer-embedding-dim", callback=split_parameter_callback(int), default="32,64", help="Embedding dimension for the tokenizer track processor.", metavar='INT')
 @click.option("--model-type", callback=split_parameter_callback(GenreClassifierType.from_str), default=",".join([p.name for p in GenreClassifierType]), help=f"Type of model ({', '.join([p.name for p in GenreClassifierType])}).", metavar='STR')
 @click.option("--model-lstm-hidden-size", callback=split_parameter_callback(int), default="8,16,32,64", help="Hidden size of the LSTM model.", metavar='INT')
 @click.option("--model-lstm-num-layers", callback=split_parameter_callback(int), default="1,2,3", help="Number of layers in the LSTM model.", metavar='INT')
@@ -80,7 +83,7 @@ def split_parameter_callback(type_: Callable = str, sep: str = ",", strip: bool 
 @click.option("--training-batch-size", callback=split_parameter_callback(int), default="64", help="Batch size.", metavar='INT')
 @click.option("--training-num-epochs", callback=split_parameter_callback(int), default="1000", help="Number of epochs.", metavar='INT')
 @click.option("--training-patience", callback=split_parameter_callback(int), default="300", help="Patience.", metavar='INT')
-@click.option("--num-measures-per-chunk", callback=split_parameter_callback(int), default="1,2,4,8", help="Number of measures in each chunk.", metavar='INT')
+@click.option("--num-measures-per-chunk", callback=split_parameter_callback(int), default="2,4,8", help="Number of measures in each chunk.", metavar='INT')
 @click.option("--chunk-overlap", callback=split_parameter_callback(bool), default="True", help="Whether chunks overlap.", metavar='BOOL')
 @click.option("--use-imfw", callback=split_parameter_callback(bool), default="True,False", help="Whether to use IMFW.", metavar='BOOL')
 @click.option("--use-tempo", callback=split_parameter_callback(bool), default="True,False", help="Whether to use tempo.", metavar='BOOL')
@@ -157,11 +160,14 @@ def main(
     ]
 
     # Set to None useless hyperparameters
-    domain = [conditional_set_none(hps, invalid_rules, inplace=True) for hps in domain]
-    print(f"Number of hyperparameter sets before decuplication: {len(domain)}")
+    domain = joblib.Parallel(n_jobs=-1, return_as="generator")(
+        joblib.delayed(conditional_set_none)(hps, invalid_rules, inplace=False) for hps in domain
+    )
+    # print(f"Number of hyperparameter sets before decuplication: {len(domain)}")
     # Remove duplicates (using fact that keys are unique in dict)
     hashes = {hash(frozenset(trial.items())): trial for trial in domain}
     domain = list(hashes.values())
+    del hashes
     print(f"Number of hyperparameter sets after filtering: {len(domain)}")
 
     random.seed(22)

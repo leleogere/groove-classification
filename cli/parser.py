@@ -24,6 +24,8 @@ class ScriptParameters:
     track_processor_pianoroll_resolution: int
     track_processor_grammar_weights_file: Path
     track_processor_grammar_tree_positional_encoding: bool
+    track_processor_tokenizer_type: str
+    track_processor_tokenizer_embedding_dim: int
     # Models parameters
     model_type: GenreClassifierType
     model_lstm_hidden_size: int
@@ -158,6 +160,18 @@ def parse_args() -> ScriptParameters:
         ),
         default=False,
     )
+    track_processor_group.add_argument(
+        "--track-processor-tokenizer-type",
+        type=str,
+        default="midilike",
+        help="Type of tokenizer to use (only for" f" {TrackProcessors.tokenizer}).",
+    )
+    track_processor_group.add_argument(
+        "--track-processor-tokenizer-embedding-dim",
+        type=int,
+        default=128,
+        help="Embedding dimension to use (only for" f" {TrackProcessors.tokenizer}).",
+    )
 
     # Models group
     models_group = parser.add_argument_group("Models")
@@ -271,6 +285,8 @@ def parse_args() -> ScriptParameters:
         track_processor_pianoroll_resolution=args.track_processor_pianoroll_resolution,
         track_processor_grammar_weights_file=args.track_processor_grammar_weights_file,
         track_processor_grammar_tree_positional_encoding=args.track_processor_grammar_tree_positional_encoding,
+        track_processor_tokenizer_type=args.track_processor_tokenizer_type,
+        track_processor_tokenizer_embedding_dim=args.track_processor_tokenizer_embedding_dim,
         model_type=args.model,
         model_lstm_hidden_size=args.model_lstm_hidden_size,
         model_lstm_num_layers=args.model_lstm_num_layers,

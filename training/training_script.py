@@ -104,17 +104,21 @@ def main(params: ScriptParameters):
         }
     elif params.model_type.name == "transformer":
         # Create positional encoder
+        # Relative or pianoroll : continuous positional encoding
         if params.track_processor_type in [TrackProcessors.relative, TrackProcessors.pianoroll]:
             positional_encoder = ContinuousPositionalEncoder
-        elif params.track_processor_type == TrackProcessors.grammar:
-            print(params.track_processor_grammar_tree_positional_encoding)
-            if params.track_processor_grammar_tree_positional_encoding:
-                positional_encoder = partial(
-                    TreePositionalEncoder,
-                    max_depth=track_processor.grammar.max_depth,
-                )
-            else:
-                positional_encoder = PositionalEncoder
+        # Grammar-tree : tree positional encoding
+        elif (
+            params.track_processor_type == TrackProcessors.grammar
+            and params.track_processor_grammar_tree_positional_encoding
+        ):
+            positional_encoder = partial(
+                TreePositionalEncoder,
+                max_depth=track_processor.grammar.max_depth,
+            )
+        # Grammar-seq or tokenizer : classical sequential positional encoding
+        elif params.track_processor_type in [TrackProcessors.grammar, TrackProcessors.tokenizer]:
+            positional_encoder = PositionalEncoder
         else:
             raise ValueError(f"Unknown track processor: {params.track_processor_type}.")
         # Specify parameters
@@ -127,6 +131,8 @@ def main(params: ScriptParameters):
         }
     else:
         raise ValueError(f"Unknown model name: {params.model_type.name}")
+    if hasattr(track_processor, "embedding"):
+        model_specific_params["embedding"] = track_processor.embedding
     model = params.model_type.value(
         input_dim=track_processor.output_dim,
         **model_specific_params,
