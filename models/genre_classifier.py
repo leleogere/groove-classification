@@ -166,7 +166,8 @@ class LSTMModule(nn.Module):
         num_layers: int,
         dropout_rate: float,
         bidirectional: bool = True,
-        embedding: nn.Embedding = None,
+        num_embeddings: int = None,
+        embedding_dim: int = None,
     ):
         super().__init__()
         self.lstm = nn.LSTM(
@@ -177,7 +178,14 @@ class LSTMModule(nn.Module):
             dropout=dropout_rate,
             bidirectional=bidirectional,
         )
-        self.embedding = embedding
+        assert (num_embeddings is None) == (embedding_dim is None)
+        if num_embeddings is not None:
+            self.embedding = nn.Embedding(
+                num_embeddings=num_embeddings,
+                embedding_dim=embedding_dim,
+            )
+        else:
+            self.embedding = None
 
     def forward(self, x, **kwargs):
         if self.embedding is not None:
@@ -193,7 +201,8 @@ class GenreClassifierLSTM(GenreClassifier):
         hidden_size: int,
         num_layers: int,
         num_classes: int,
-        embedding: nn.Embedding = None,
+        num_embeddings: int = None,
+        embedding_dim: int = None,
         dropout_rate: float = 0.1,
         lr: float = 1e-3,
         weight_decay: float = 0.0,
@@ -210,7 +219,8 @@ class GenreClassifierLSTM(GenreClassifier):
             num_layers=num_layers,
             dropout_rate=dropout_rate,
             bidirectional=bidirectional,
-            embedding=embedding,
+            num_embeddings=num_embeddings,
+            embedding_dim=embedding_dim,
         )
         super().__init__(
             base_module=module,
@@ -237,13 +247,14 @@ class TransformerModule(nn.Module):
         num_layers: int,
         positional_encoder: Type[nn.Module],
         dropout_rate: float = 0.1,
-        embedding: nn.Embedding = None,
+        num_embeddings: int = None,
+        embedding_dim: int = None,
     ):
         super().__init__()
         # torch need embed_dim % nheads == 0, so we add a linear layer to adjust the input dimension
         encoder_input_dim = num_heads * num_features_per_head
-        if embedding is not None:
-            input_dim = embedding.embedding_dim
+        if num_embeddings is not None:
+            input_dim = embedding_dim
         self.linear = nn.Linear(input_dim, encoder_input_dim)
         self.relu = nn.ReLU()
         self.pe = positional_encoder(d_model=encoder_input_dim, dropout=0.1)
@@ -257,7 +268,12 @@ class TransformerModule(nn.Module):
             ),
             num_layers=num_layers,
         )
-        self.embedding = embedding
+        assert (num_embeddings is None) == (embedding_dim is None)
+        if num_embeddings is not None:
+            self.embedding = nn.Embedding(
+                num_embeddings=num_embeddings,
+                embedding_dim=embedding_dim,
+            )
 
     def forward(self, x, **kwargs):
         if self.embedding is not None:
@@ -282,7 +298,8 @@ class GenreClassifierTransformer(GenreClassifier):
         num_layers: int,
         num_classes: int,
         positional_encoder: Type[nn.Module],
-        embedding: nn.Embedding = None,
+        num_embeddings: int = None,
+        embedding_dim: int = None,
         dropout_rate: float = 0.1,
         lr: float = 1e-3,
         weight_decay: float = 0.0,
@@ -301,7 +318,8 @@ class GenreClassifierTransformer(GenreClassifier):
             num_layers=num_layers,
             positional_encoder=positional_encoder,
             dropout_rate=dropout_rate,
-            embedding=embedding,
+            num_embeddings=num_embeddings,
+            embedding_dim=embedding_dim,
         )
         super().__init__(
             base_module=module,

@@ -13,15 +13,10 @@ class TokenizerTrackProcessor(TrackProcessor):
     short_name = "tokenizer"
     allowed_types = ["midilike", "remi", "tsd", "structured"]
 
-    def __init__(self, type: str, embedding_dim: int = 128, use_tempo: bool = True):
+    def __init__(self, type: str, use_tempo: bool = True):
         super().__init__(use_tempo=use_tempo)
         self.type = type
         self.tokenizer = self._instantiate_tokenizer()
-        self.embedding_dim = embedding_dim
-        self.embedding = nn.Embedding(
-            num_embeddings=len(self.tokenizer.vocab),
-            embedding_dim=embedding_dim,
-        )  # the embedding will be used in the classifier
 
     def _instantiate_tokenizer(self):
         config = miditok.TokenizerConfig(
@@ -48,7 +43,6 @@ class TokenizerTrackProcessor(TrackProcessor):
             [
                 self.name,
                 f"type={self.type}",
-                f"embedding_dim={self.embedding_dim}",
                 f"use_tempo={self.use_tempo}",
             ]
         )

@@ -28,6 +28,7 @@ def main(params: ScriptParameters):
         for parameter in params.__dict__.keys()
         if parameter.startswith(track_processor_param_prefix)
     }
+    track_processor_params.pop("embedding_dim", None)  # Not needed here, only in model
     track_processor_params["use_tempo"] = params.use_tempo
     if params.track_processor_type == TrackProcessors.grammar:
         track_processor_params["sequences_dir"] = params.processed_data_path / "cache"
@@ -131,8 +132,9 @@ def main(params: ScriptParameters):
         }
     else:
         raise ValueError(f"Unknown model name: {params.model_type.name}")
-    if hasattr(track_processor, "embedding"):
-        model_specific_params["embedding"] = track_processor.embedding
+    if track_processor.short_name == TrackProcessors.tokenizer.name:
+        model_specific_params["num_embeddings"] = track_processor.output_dim
+        model_specific_params["embedding_dim"] = params.track_processor_tokenizer_embedding_dim
     model = params.model_type.value(
         input_dim=track_processor.output_dim,
         **model_specific_params,
