@@ -291,7 +291,6 @@ class GenreClassifierTransformer(GenreClassifier):
         num_classes: int,
         positional_encoder: Type[nn.Module],
         num_embeddings: int = None,
-        embedding_dim: int = None,
         dropout_rate: float = 0.1,
         lr: float = 1e-3,
         weight_decay: float = 0.0,
