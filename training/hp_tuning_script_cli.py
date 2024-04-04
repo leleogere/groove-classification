@@ -1,18 +1,16 @@
-import argparse
 import copy
 import gc
-import inspect
-import itertools
+import math
 import os
 import random
 import shutil
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import Callable
 
 import click
-import joblib
 import tabulate
 import torch
 
@@ -35,6 +33,59 @@ class HyperParameter:
     @property
     def type(self):
         return type(self.values[0])
+
+
+class RunGenerator:
+    """
+    Generator that yields a dictionary with the hyperparameters to test. It iterates over all the
+    possible combinations of the hyperparameters in a random order. It makes sure that the same
+    combination is not tested twice.
+    """
+
+    def __init__(
+        self,
+        hparams: list[HyperParameter],
+        fix_run: Callable[[dict], dict] = lambda x: x,
+        seed: int = None,
+    ):
+        self.hparams = hparams
+        self.fix_run = fix_run
+        self.already_tested = set()
+        self.max_num_elements = math.prod(len(hp.values) for hp in hparams)
+        gamma = 0.5772156649
+        hn = (
+            gamma
+            + math.log(self.max_num_elements)
+            + 1 / (2 * self.max_num_elements)
+            - 1 / (12 * self.max_num_elements**2)
+        )  # approx sum(1 / n for n in range(1, n + 1))
+        avg_num_tries = self.max_num_elements * hn
+        self.max_attempts_per_trial = math.sqrt(
+            avg_num_tries
+        )  # how much before considering no more possible combinations
+        self.random = random.Random(seed)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        run = {}
+        hashed_run = hash(frozenset(run.items()))
+
+        tries = 0
+        while hashed_run in self.already_tested or tries == 0:
+            for hp in self.hparams:
+                run[hp.name] = self.random.choice(hp.values)
+            run = self.fix_run(run)
+            hashed_run = hash(frozenset(run.items()))
+            tries += 1
+            if tries >= self.max_attempts_per_trial:
+                raise StopIteration
+
+        self.already_tested.add(hashed_run)
+        if len(self.already_tested) == self.max_attempts_per_trial:
+            raise StopIteration
+        return run
 
 
 def split_parameter_callback(type_: Callable = str, sep: str = ",", strip: bool = True):
@@ -96,12 +147,7 @@ def main(
 ):
     for pname, pvalue in params.items():
         print(f"{pname}: {pvalue}")
-    hparams = [HyperParameter(k, v) for k, v in params.items() if k not in ["start_at"]]
-
-    domain = (
-        dict(zip(map(lambda hp: hp.name, hparams), x))
-        for x in itertools.product(*map(lambda hp: hp.values, hparams))
-    )  # See https://stackoverflow.com/questions/5228158/cartesian-product-of-a-dictionary-of-lists/40623158
+    hparams = [HyperParameter(k, v) for k, v in params.items()]
 
     def conditional_set_none(
         hps: dict,
@@ -159,19 +205,11 @@ def main(
         ),
     ]
 
-    # Set to None useless hyperparameters
-    domain = joblib.Parallel(n_jobs=-1, return_as="generator")(
-        joblib.delayed(conditional_set_none)(hps, invalid_rules, inplace=False) for hps in domain
+    run_generator = RunGenerator(
+        hparams,
+        fix_run=partial(conditional_set_none, invalid_rules=invalid_rules),
+        seed=22,
     )
-    # print(f"Number of hyperparameter sets before decuplication: {len(domain)}")
-    # Remove duplicates (using fact that keys are unique in dict)
-    hashes = {hash(frozenset(trial.items())): trial for trial in domain}
-    domain = list(hashes.values())
-    del hashes
-    print(f"Number of hyperparameter sets after filtering: {len(domain)}")
-
-    random.seed(22)
-    random.shuffle(domain)
 
     # Use a file to stop training after the current run
     pid_file = Path(f"/tmp/groove-stop-{os.getpid()}")
@@ -179,12 +217,12 @@ def main(
         pid_file.unlink()
 
     # Loop over hyperparameters
-    for i, cur_hparams in enumerate(domain):
+    for i, cur_hparams in enumerate(run_generator):
         if i < start_at:
             continue
         training_params = ScriptParameters(override_metadata=override_metadata, **cur_hparams)
         print("=" * 80)
-        print(f"Run {i + 1}/{len(domain)}")
+        print(f"Run {i + 1}")
         print(
             tabulate.tabulate(
                 list(cur_hparams.items()),
@@ -192,35 +230,6 @@ def main(
                 tablefmt="rounded_outline",
             )
         )
-        #
-        #     # # Checking if same hyperparameters already tested
-        #     # if args.skip_already_tested_hps:
-        #     #     existing = False
-        #     #     ignored_params = ["training_batch_size", "training_num_epochs", "training_patience"]
-        #     #     if params.results_path.exists():
-        #     #         new_hparams = copy.deepcopy(params.to_serializable_dict())
-        #     #         for ignored_param in ignored_params:
-        #     #             new_hparams.pop(ignored_param)
-        #     #         hparam_files = list(params.results_path.rglob("**/hparams.yaml"))
-        #     #         for hparam_file in hparam_files:
-        #     #             if hparam_file.exists():
-        #     #                 with open(hparam_file, "r") as f:
-        #     #                     try:
-        #     #                         hparams = yaml.safe_load(f)
-        #     #                     except yaml.YAMLError as exc:
-        #     #                         print(f"Error in loading {hparam_file}: exc")
-        #     #                         continue
-        #     #                 for ignored_param in ignored_params:
-        #     #                     hparams.pop(ignored_param)
-        #     #                 if hparams == new_hparams:
-        #     #                     existing = True
-        #     #                     break
-        #     #     if existing:
-        #     #         print(
-        #     #             "Skipping run as same hyperparameters already tested in"
-        #     #             f" '{hparam_file.parent}'."
-        #     #         )
-        #     #         continue
 
         train_one_model(training_params)
         # Try to release GPU memory
