@@ -54,7 +54,7 @@ class TokenizerTrackProcessor(TrackProcessor):
 
     @property
     def output_dim(self) -> int:
-        return len(self.tokenizer.vocab)
+        return 1
 
 
 if __name__ == "__main__":

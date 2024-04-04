@@ -98,6 +98,7 @@ def main(params: ScriptParameters):
     loss = torch.nn.CrossEntropyLoss(weight=weights_c)
 
     # Create model
+    input_dim = track_processor.output_dim
     if params.model_type.name == "lstm":
         model_specific_params = {
             "hidden_size": params.model_lstm_hidden_size,
@@ -132,11 +133,11 @@ def main(params: ScriptParameters):
         }
     else:
         raise ValueError(f"Unknown model name: {params.model_type.name}")
-    if track_processor.short_name == TrackProcessors.tokenizer.name:
-        model_specific_params["num_embeddings"] = track_processor.output_dim
-        model_specific_params["embedding_dim"] = params.track_processor_tokenizer_embedding_dim
+    if params.track_processor_type == TrackProcessors.tokenizer:
+        model_specific_params["num_embeddings"] = len(track_processor.tokenizer.vocab)
+        input_dim = params.track_processor_tokenizer_embedding_dim  # fix model input dim to emb_dim
     model = params.model_type.value(
-        input_dim=track_processor.output_dim,
+        input_dim=input_dim,
         **model_specific_params,
         num_classes=len(groove_module.id_to_label),
         dropout_rate=params.model_dropout_rate,
