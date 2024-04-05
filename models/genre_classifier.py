@@ -266,6 +266,8 @@ class TransformerModule(nn.Module):
                 num_embeddings=num_embeddings,
                 embedding_dim=input_dim,
             )
+        else:
+            self.embedding = None
 
     def forward(self, x, **kwargs):
         if self.embedding is not None:
