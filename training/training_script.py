@@ -1,4 +1,5 @@
 import os
+import types
 from datetime import datetime
 from functools import partial
 from pathlib import Path
@@ -136,6 +137,7 @@ def main(params: ScriptParameters):
     if params.track_processor_type == TrackProcessors.tokenizer:
         model_specific_params["num_embeddings"] = len(track_processor.tokenizer.vocab)
         input_dim = params.track_processor_tokenizer_embedding_dim  # fix model input dim to emb_dim
+
     model = params.model_type.value(
         input_dim=input_dim,
         **model_specific_params,
@@ -149,6 +151,28 @@ def main(params: ScriptParameters):
         loss_function=loss,
         hparams_to_log=params.to_serializable_dict(),
     )
+
+    # SHORTCUT LSTM to add positional encoding
+    if (
+        params.model_type.name == "lstm"
+        and params.track_processor_type == TrackProcessors.grammar
+        and params.track_processor_grammar_tree_positional_encoding
+        and os.environ.get("LSTM_TREE_PE") is not None
+        and os.environ.get("LSTM_TREE_PE") == "true"
+    ):
+        print("Adding positional encoding to LSTM model")
+        positional_encoder = TreePositionalEncoder(
+            d_model=input_dim,
+            max_depth=track_processor.grammar.max_depth,
+        )
+
+        def forward(self, x, positions, **kwargs):
+            x = self.pe(x, positions)
+            x, _ = self.lstm(x)
+            return x
+
+        model.base_module.pe = positional_encoder
+        model.base_module.forward = types.MethodType(forward, model.base_module)
 
     # Prepare logger
     try:

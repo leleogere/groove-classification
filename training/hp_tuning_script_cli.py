@@ -198,11 +198,11 @@ def main(
             ],
             [],
         ),
-        # Pop tree positional encoding for LSTM models
-        (
-            ("model_type", GenreClassifierType.lstm),
-            "track_processor_grammar_tree_positional_encoding",
-        ),
+        # Pop tree positional encoding for LSTM models  # TEMPORARLY ALLOWED FOR ENABLING PE for LSTMs
+        # (
+        #     ("model_type", GenreClassifierType.lstm),
+        #     "track_processor_grammar_tree_positional_encoding",
+        # ),
     ]
 
     run_generator = RunGenerator(
