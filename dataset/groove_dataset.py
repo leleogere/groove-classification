@@ -255,6 +255,7 @@ class GrooveMidiModule(L.LightningDataModule):
             shuffle=True,
             collate_fn=self.track_processor.collate_fn,
             num_workers=self.num_workers,
+            drop_last=True,
         )
 
     def val_dataloader(self) -> DataLoader:
