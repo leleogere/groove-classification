@@ -42,8 +42,6 @@ class GrammarTrackProcessor(TrackProcessor):
         # self.scoring_env.set_trs(pyqparse.Mode.Drum)
         # self.scoring_env.import_WTA(str(self.grammar_file), pyqparse.WeightCode.Tropical)
         # self.scoring_env.set_debug(False)
-        if sequences_dir is None:
-            sequences_dir = Path(tempfile.mkdtemp(prefix="production_rules_sequences_"))
         self.tree_positional_encoding = tree_positional_encoding
         if sequences_dir is not None:
             self.sequences_dir = sequences_dir / self.str_state()
