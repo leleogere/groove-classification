@@ -104,6 +104,9 @@ class DrumList:
     def __len__(self):
         return len(self.drums)
 
+    def __iter__(self):
+        return iter(self.drums)
+
     def min_pitch(self):
         return min([d.pitch for d in self.drums])
 
