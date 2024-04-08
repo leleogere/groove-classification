@@ -290,7 +290,10 @@ class Node:
         raw_tree = scoring_env.best_tree(pyqparse.Model.DrumAgostini, 1)
         return cls.from_qparse(raw_tree, Grammar.from_file(grammar_file))
 
-    def to_string_top_down(self):
+    def to_string_top_down(
+        self,
+        node_representation: Callable[[Self], str] = lambda n: str(n.id),
+    ) -> str:
         """
         Get a string representation of the tree in a top-down fashion.
         Adapted from https://stackoverflow.com/questions/15675261/displaying-a-tree-in-ascii
@@ -334,12 +337,12 @@ class Node:
 
             return "".join(builder[:-1])
 
-        name = str(self.id)
+        name = node_representation(self)
 
         if not self.children:
             return name
 
-        child_strs = [child.to_string_top_down() for child in self.children]
+        child_strs = [child.to_string_top_down(node_representation) for child in self.children]
         child_widths = [block_width(s) for s in child_strs]
 
         # How wide is this block?
@@ -373,7 +376,10 @@ class Node:
 
         return name_str + "\n" + brace + "\n" + below
 
-    def to_string_left_right(self) -> str:
+    def to_string_left_right(
+        self,
+        node_representation: Callable[[Self], str] = lambda n: str(n.id),
+    ) -> str:
         """
         Get a string representation of the tree in a left-right fashion.
 
@@ -387,7 +393,7 @@ class Node:
             else:
                 new_prefix = prefix + "├─ "
                 next_prefix = prefix + "│  "
-            string = new_prefix + str(node.id) + "\n"
+            string = new_prefix + node_representation(node) + "\n"
             for i, child in enumerate(node.children):
                 string += recursive_part(child, next_prefix, i == node.nbc - 1)
             return string
