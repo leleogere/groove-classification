@@ -213,7 +213,7 @@ class GrammarTrackProcessor(TrackProcessor):
                         f" track {track.midi_path}"
                     )
                 event = midi_note_events[int_or_iter]
-                if event.type == "note_on":
+                if event.type == "note_on" and event.velocity > 0:
                     return Note(start=None, end=None, pitch=event.note, velocity=event.velocity)
                 else:
                     return None
