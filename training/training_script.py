@@ -195,7 +195,7 @@ def main(params: ScriptParameters):
     model_checkpoint = callbacks.ModelCheckpoint(
         monitor="val/f1_macro",
         mode="max",
-        save_top_k=3,
+        save_top_k=1,
         filename="{epoch}-vf1={val/f1_macro:.2f}-vloss={val/loss:.2f}",
         auto_insert_metric_name=False,
     )
