@@ -18,7 +18,7 @@ class TokenizerTrackProcessor(TrackProcessor):
         self.type = type
         self.tokenizer = self._instantiate_tokenizer()
 
-    def _instantiate_tokenizer(self):
+    def _instantiate_tokenizer(self) -> miditok.MIDITokenizer:
         config = miditok.TokenizerConfig(
             pitch_range=(self.drums.min_pitch(), self.drums.max_pitch()),
         )
