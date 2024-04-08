@@ -34,12 +34,12 @@ class TokenizerTrackProcessor(TrackProcessor):
             case _:
                 raise ValueError(f"Unknown tokenizer: {self.type} (allowed: {self.allowed_types})")
 
-    def str_state(self) -> str:
+    def str_state(self, separator: str = "_-_") -> str:
         """String representation of the state of the track processor.
 
         :return: String representation of the state of the track processor.
         """
-        return "_-_".join(
+        return separator.join(
             [
                 self.name,
                 f"type={self.type}",
