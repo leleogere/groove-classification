@@ -40,7 +40,7 @@ class PianoRollTrackProcessor(TrackProcessor):
             piano_roll[self.drums.pitch_to_id[note.pitch], i_start:i_end] = (
                 note.velocity / self.velocity_norm
             )
-        positions = np.linspace(0, length, num_steps).tolist()
+        positions = (np.arange(0, num_steps) / self.resolution).tolist()
         return piano_roll.transpose(0, 1), positions
 
     @property
