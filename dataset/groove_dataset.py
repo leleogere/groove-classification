@@ -165,11 +165,14 @@ class GrooveMidiModule(L.LightningDataModule):
             success_file.touch()
 
     def setup(self, stage: str) -> None:
-        if self._already_setup:
-            return
         # Split dict keys
         train_key, val_key, test_key = "train", "validation", "test"
-        split_keys = [train_key, val_key, test_key]
+        if stage in ["fit", "validate"]:
+            split_keys = [train_key, val_key, test_key]
+        elif stage == "test":
+            split_keys = [test_key]
+        else:
+            split_keys = [train_key, val_key, test_key]
 
         # Structure to gather information about labels
         # The structure is the following: label_infos[label][split][field] = value
@@ -242,9 +245,8 @@ class GrooveMidiModule(L.LightningDataModule):
                     self.label_infos[track.label][split]["chunks"] += 1
 
         # Set attributes
-        self.train_dataset = datasets[train_key]
-        self.val_dataset = datasets[val_key]
-        self.test_dataset = datasets[test_key]
+        for split in split_keys:
+            setattr(self, f"{split}_dataset", datasets[split])
 
         self._already_setup = True
 
