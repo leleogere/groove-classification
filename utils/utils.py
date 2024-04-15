@@ -61,6 +61,8 @@ class RelativeNote(AsDictMixin):
 
 
 def compute_relative_notes(notes: list[Note]) -> list[RelativeNote]:
+    if not notes:
+        return []
     relative_notes = [
         RelativeNote.from_note(n, timeshift=n.start - n_prev.start)
         for n_prev, n in zip([notes[0]] + notes, notes)
