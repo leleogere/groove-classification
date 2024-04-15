@@ -50,11 +50,6 @@ def main(params: ScriptParameters):
             num_measures_per_chunk=params.num_measures_per_chunk,
             chunk_overlap=params.chunk_overlap,
         )
-    filter_if_grammar = (
-        (lambda t: t.time_signature == (4, 4))
-        if params.track_processor_type.name == "grammar"
-        else None
-    )
     groove_module = GrooveMidiModule(
         path=params.data_path,
         processed_data_path=params.processed_data_path,
