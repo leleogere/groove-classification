@@ -1,24 +1,21 @@
 import json
 import os
 import subprocess
-import tempfile
 from pathlib import Path
 from typing import Iterable
 
 import joblib
+import pyqparse
 import torch
 
-import pyqparse
-
 from data_processing.track_processors_base import TrackProcessor
+from utils.constants import DRUMS
+from utils.grammar import Grammar
 from utils.grammar import Node
 from utils.utils import Note
 from utils.utils import ProcessedTrack
 from utils.utils import Track
-from utils.constants import DRUMS
-from utils.grammar import Grammar
 from utils.utils import load_and_validate_midi_file
-
 
 pyqparse.set_verbosity_level(1)
 

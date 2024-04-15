@@ -4,8 +4,8 @@ from pathlib import Path
 import pyqparse
 
 from grammar import Grammar
-from grammar import build_scoring_env
 from grammar import Node
+from grammar import build_scoring_env
 
 pyqparse.set_verbosity_level(0)
 

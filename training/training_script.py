@@ -1,12 +1,11 @@
 import os
 import types
-from datetime import datetime
 from functools import partial
-from pathlib import Path
 
 import lightning as L
-from lightning.pytorch import loggers as loggers, callbacks as callbacks
 import torch
+from lightning.pytorch import callbacks as callbacks
+from lightning.pytorch import loggers as loggers
 
 from cli.parser import ScriptParameters
 from cli.parser import parse_args

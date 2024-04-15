@@ -3,9 +3,9 @@ import copy
 import torch
 from torch import nn
 
+from utils.constants import DRUMS
 from utils.utils import ProcessedTrack
 from utils.utils import Track
-from utils.constants import DRUMS
 
 
 class TrackProcessor:

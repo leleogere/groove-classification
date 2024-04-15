@@ -1,10 +1,8 @@
-from collections import defaultdict
 from pathlib import Path
 from typing import Sequence
 from typing import TypeVar
 
 import joblib
-import numpy as np
 import pretty_midi as pm
 from tqdm import tqdm
 

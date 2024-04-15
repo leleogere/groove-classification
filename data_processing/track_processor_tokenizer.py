@@ -3,7 +3,6 @@ from pathlib import Path
 import miditok
 import symusic
 import torch
-from torch import nn
 
 from data_processing.track_processors_base import TrackProcessor
 from utils.utils import Track

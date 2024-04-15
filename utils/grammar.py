@@ -1,9 +1,6 @@
-import copy
-import inspect
 import json
 import re
 import sys
-from collections import defaultdict
 from collections import namedtuple
 from pathlib import Path
 from typing import Any

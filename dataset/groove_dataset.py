@@ -1,14 +1,11 @@
 import copy
 import csv
-import os
 import tempfile
 import zipfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Callable
 from typing import Iterable
-from typing import Type
-from typing import TypeVar
 from urllib.request import urlretrieve
 
 import lightning as L
@@ -20,12 +17,10 @@ from torch.utils.data import Dataset
 from data_augmentation.midi_augmentor import MidiAugmentor
 from data_augmentation.midi_splitter import MidiSplitter
 from data_augmentation.midi_splitter import Splitter
-from data_augmentation.midi_splitter import SplitterAbstract
 from data_processing.track_processor_relative import RelativeMultivariateTrackProcessor
 from data_processing.track_processors_base import TrackProcessor
-from utils.utils import Track
 from utils.constants import DRUMS
-from utils.utils import load_json
+from utils.utils import Track
 from utils.utils import process_label
 
 
