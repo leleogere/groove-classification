@@ -127,7 +127,10 @@ class GenreClassifier(L.LightningModule):
             self.class_names,
             normalization="true",
         )  # .transpose((2, 0, 1))
-        self.logger.log_image(f"{key}_confusion_matrix", images=[image], step=self.global_step)
+        if hasattr(self.logger, "log_image"):
+            self.logger.log_image(f"{key}_confusion_matrix", images=[image], step=self.global_step)
+        else:
+            print("No logger.log_image method found in logger")
         # Reset accumulated predictions
         self._reset_accumulated_predictions(key)
 
