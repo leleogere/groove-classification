@@ -1,5 +1,6 @@
 import copy
 import csv
+import os
 import tempfile
 import zipfile
 from collections import defaultdict
@@ -107,7 +108,7 @@ class GrooveMidiModule(L.LightningDataModule):
     _split_folder_prefix: str = "split"
     _labels_file_name: str = "labels.txt"
     _already_setup: bool = False
-    num_workers: int = 20
+    num_workers: int = os.cpu_count()
 
     def __init__(
         self,
