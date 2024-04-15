@@ -1,16 +1,17 @@
 import time
+from collections import defaultdict
 from enum import Enum
 from typing import Callable
 from typing import Type
 
 import lightning as L
 import torch
+import wandb
 from torch import nn
 from torchmetrics.classification import MulticlassF1Score
 
 from models.positional_encoding import ContinuousPositionalEncoder
 from models.positional_encoding import TreePositionalEncoder
-from utils.confusion_matrix import confusion_matrix_pipeline
 
 
 class GenreClassifier(L.LightningModule):
@@ -121,16 +122,13 @@ class GenreClassifier(L.LightningModule):
             on_epoch=True,
             prog_bar=True,
         )
-        image = confusion_matrix_pipeline(
-            y_true.cpu(),
-            y_pred.cpu(),
-            self.class_names,
-            normalization="true",
-        )  # .transpose((2, 0, 1))
-        if hasattr(self.logger, "log_image"):
-            self.logger.log_image(f"{key}_confusion_matrix", images=[image], step=self.global_step)
-        else:
-            print("No logger.log_image method found in logger")
+        cm = wandb.plot.confusion_matrix(
+            y_true=y_true.cpu().numpy(),
+            preds=y_pred.cpu().numpy(),
+            class_names=self.class_names,
+        )
+        if not self.trainer.sanity_checking and hasattr(self.logger, "experiment"):
+            self.logger.experiment.log({f"{key}/cm": cm})
         # Reset accumulated predictions
         self._reset_accumulated_predictions(key)
 
@@ -156,9 +154,7 @@ class GenreClassifier(L.LightningModule):
             return {"y_true": [], "y_pred": []}
 
         if key is None:
-            self.accumulated_predictions = {
-                k: default_dict() for k in [self._train_key, self._val_key, self._test_key]
-            }
+            self.accumulated_predictions = defaultdict(default_dict)
         else:
             self.accumulated_predictions[key] = default_dict()
 
