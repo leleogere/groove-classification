@@ -202,7 +202,7 @@ class GrooveMidiModule(L.LightningDataModule):
                 track.label_idx = self.label_to_id[track.label]
 
         # Augment dataset if needed
-        if self.augmentor is not None:
+        if self.augmentor is not None and train_key in split_keys:
             augmented_path = (
                 self.processed_data_path
                 / f"{self._augmentation_folder_prefix}_num={self.augmentor.num_variations_per_track}"
@@ -262,7 +262,7 @@ class GrooveMidiModule(L.LightningDataModule):
 
     def val_dataloader(self) -> DataLoader:
         return DataLoader(
-            self.val_dataset,
+            self.validation_dataset,
             batch_size=self.batch_size,
             shuffle=False,
             collate_fn=self.track_processor.collate_fn,
