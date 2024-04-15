@@ -81,7 +81,9 @@ class GenreClassifier(L.LightningModule):
         return x
 
     def configure_optimizers(self):
-        return torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
+        return {"optimizer": optimizer, "lr_scheduler": lr_scheduler}
 
     def common_step(self, batch, key: str):
         # Get data
