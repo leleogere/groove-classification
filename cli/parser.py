@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from pprint import pformat
 
@@ -51,6 +52,21 @@ class ScriptParameters:
             k: v if isinstance(v, (int, float, str, bool)) else str(v)
             for k, v in self.__dict__.items()
         }
+
+    @classmethod
+    def from_serializable_dict(cls, d: dict):
+        parameters = {}
+        # automatically get enums by annotation
+        enums = {k: v for k, v in cls.__annotations__.items() if issubclass(v, Enum)}
+        for k, v in d.items():
+            if k not in cls.__annotations__:
+                print(f"Warning: {k} is not a valid parameter.")
+                continue
+            if k in enums:
+                parameters[k] = enums[k].__members__[v]
+            else:
+                parameters[k] = cls.__annotations__[k](v)
+        return cls(**parameters)
 
 
 def bool_from_str(s: str) -> bool:
