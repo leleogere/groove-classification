@@ -6,16 +6,16 @@ ARG NEW_MAMBA_USER_ID
 ARG NEW_MAMBA_USER_GID
 USER root
 RUN if grep -q '^ID=alpine$' /etc/os-release; then \
-      # alpine does not have usermod/groupmod
-      apk add --no-cache --virtual temp-packages shadow; \
+    # alpine does not have usermod/groupmod
+    apk add --no-cache --virtual temp-packages shadow; \
     fi && \
     usermod "--login=${NEW_MAMBA_USER}" "--home=/home/${NEW_MAMBA_USER}" \
         --move-home "-u ${NEW_MAMBA_USER_ID}" "${MAMBA_USER}" && \
     groupmod "--new-name=${NEW_MAMBA_USER}" \
         "-g ${NEW_MAMBA_USER_GID}" "${MAMBA_USER}" && \
     if grep -q '^ID=alpine$' /etc/os-release; then \
-      # remove the packages that were only needed for usermod/groupmod
-      apk del temp-packages; \
+    # remove the packages that were only needed for usermod/groupmod
+    apk del temp-packages; \
     fi && \
     # Update the expected value of MAMBA_USER for the
     # _entrypoint.sh consistency check.
@@ -65,11 +65,11 @@ RUN cd "$QPARSE_PATH" && if [ ! -d build ]; then mkdir build; fi && cd build &&\
     make -j$PARALLEL_MAKE_JOBS drumparse &&\
     make -j$PARALLEL_MAKE_JOBS pyqparse
 
+# Allow mambauser to access GPUs
+ARG VIDEO_GROUP_ID
+RUN groupmod -g $VIDEO_GROUP_ID video && usermod -a -G video $MAMBA_USER
 USER $MAMBA_USER
 
 # Make qparselib available everywhere
 ENV PATH="${PATH}:${QPARSE_PATH}/build"
 ENV PYTHONPATH="${PYTHONPATH}:${QPARSE_PATH}/build"
-
-# Install ipython
-RUN pip install ipython
