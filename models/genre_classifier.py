@@ -6,6 +6,7 @@ from typing import Type
 import lightning as L
 import torch
 import wandb
+from sklearn.metrics import classification_report
 from torch import nn
 from torchmetrics.classification import MulticlassF1Score
 
@@ -121,13 +122,31 @@ class GenreClassifier(L.LightningModule):
             on_epoch=True,
             prog_bar=True,
         )
-        cm = wandb.plot.confusion_matrix(
-            y_true=y_true.cpu().numpy(),
-            preds=y_pred.cpu().numpy(),
-            class_names=self.class_names,
-        )
         if not self.trainer.sanity_checking and hasattr(self.logger, "experiment"):
+            cm = wandb.plot.confusion_matrix(
+                y_true=y_true.cpu().numpy(),
+                preds=y_pred.cpu().numpy(),
+                class_names=self.class_names,
+                split_table=True,
+            )
+            cr = classification_report(
+                y_true,
+                y_pred,
+                target_names=self.class_names,
+                output_dict=True,
+            )
+            cr["accuracy"] = {
+                "precision": float("nan"),
+                "recall": float("nan"),
+                "f1-score": cr["accuracy"],
+                "support": len(y_true),
+            }
+            cr_table = wandb.Table(
+                data=[[name] + [v for v in metric.values()] for name, metric in cr.items()],
+                columns=["class"] + list(next(iter(cr.items()))[1].keys()),
+            )
             self.logger.experiment.log({f"{key}/cm": cm})
+            self.logger.experiment.log({f"classification_report/{key}": cr_table})
         # Reset accumulated predictions
         self._reset_accumulated_predictions(key)
 
