@@ -55,7 +55,7 @@ class GrammarTrackProcessor(TrackProcessor):
             [
                 self.name,
                 f"use_tempo={self.use_tempo}",
-                f"grammar_file={str(self.grammar_file).replace(os.sep, '-')}",
+                f"grammar_file={self.grammar_file.name}",
                 f"tree_positional_encoding={self.tree_positional_encoding}",
             ]
         )
@@ -85,14 +85,16 @@ class GrammarTrackProcessor(TrackProcessor):
         # return sequence
 
         # Run the parsing as a subprocess bc pyqparse is sometimes result in a segfault when
-        # dealing with complex rythms. This way, the segfault is contained in the subprocess, and
+        # dealing with complex rhythms. This way, the segfault is contained in the subprocess, and
         # does not crash the main process.
+        # Not very clean but no other choice for now.
+        script_location = Path(__file__).parent.parent / "utils" / "_parse_midi_subprocess.py"
         environ = os.environ.copy()
         try:
             json_tree = subprocess.run(
                 [
                     "python",
-                    "utils/_parse_midi_subprocess.py",
+                    script_location,
                     str(track.midi_path),
                     "--tempo",
                     str(track.bpm),

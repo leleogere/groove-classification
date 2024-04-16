@@ -3,9 +3,7 @@ from pathlib import Path
 
 import pyqparse
 
-from grammar import Grammar
-from grammar import Node
-from grammar import build_scoring_env
+import grammar as g
 
 pyqparse.set_verbosity_level(0)
 
@@ -16,7 +14,7 @@ def main(
     time_signature: tuple[int, int],
     grammar_file: Path,
 ):
-    scoring_env = build_scoring_env(
+    scoring_env = g.build_scoring_env(
         path=midi_path,
         tempo=tempo,
         time_signature=time_signature,
@@ -26,7 +24,7 @@ def main(
     raw_tree = scoring_env.best_tree(pyqparse.Model.DrumAgostini, 1)
     scoring_env.close_score()
     # tree = Node(raw_tree, Grammar.from_file(grammar_file))
-    tree = Node.from_qparse(raw_tree, Grammar.from_file(grammar_file), flatten_measures=True)
+    tree = g.Node.from_qparse(raw_tree, g.Grammar.from_file(grammar_file), flatten_measures=True)
     tree_str = json.dumps(
         tree.to_dict(),
         separators=(",", ":"),

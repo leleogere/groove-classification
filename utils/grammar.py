@@ -44,6 +44,13 @@ class Grammar:
         self._create_simplified_ids()
         self.max_depth = max_depth  # TODO: compute it automatically from the grammar?
 
+    def __eq__(self, other):
+        return (
+            self.basic_rules == other.basic_rules
+            and self._simplified_ids == other._simplified_ids
+            and self.max_depth == other.max_depth
+        )
+
     @property
     def first_measure_split_id(self) -> int:
         return len(self.basic_rules) + self.SIMPLE_MEASURE_SPLIT_RULE.offset_with_basic_rules
@@ -131,6 +138,15 @@ class Node:
         return (
             f"{self.__class__.__name__}(id={self.id}, children={len(self.children)},"
             f" midi=({self.midi_start_index}, {self.midi_last_index}))"
+        )
+
+    def __eq__(self, other):
+        return (
+            self.grammar == other.grammar
+            and self.id == other.id
+            and self.children == other.children
+            and self.midi_start_index == other.midi_start_index
+            and self.midi_last_index == other.midi_last_index
         )
 
     @property

@@ -58,7 +58,6 @@ class TokenizerTrackProcessor(TrackProcessor):
 
 if __name__ == "__main__":
     from utils.utils import parse_bpm_from_file_name, parse_time_signature_from_file_name
-    import matplotlib.pyplot as plt
 
     # MIDI_PATH = Path("../groove_data/groove/drummer1/session1")
     # midi_paths = list(MIDI_PATH.rglob("*_funk_80_*.mid"))[:1]
