@@ -123,15 +123,17 @@ class GenreClassifier(L.LightningModule):
             prog_bar=True,
         )
         if not self.trainer.sanity_checking and hasattr(self.logger, "experiment"):
+            y_true_np = y_true.cpu().numpy()
+            y_pred_np = y_pred.cpu().numpy()
             cm = wandb.plot.confusion_matrix(
-                y_true=y_true.cpu().numpy(),
-                preds=y_pred.cpu().numpy(),
+                y_true=y_true_np,
+                preds=y_pred_np,
                 class_names=self.class_names,
                 split_table=True,
             )
             cr = classification_report(
-                y_true,
-                y_pred,
+                y_true_np,
+                y_pred_np,
                 target_names=self.class_names,
                 output_dict=True,
             )
@@ -139,7 +141,7 @@ class GenreClassifier(L.LightningModule):
                 "precision": float("nan"),
                 "recall": float("nan"),
                 "f1-score": cr["accuracy"],
-                "support": len(y_true),
+                "support": len(y_true_np),
             }
             cr_table = wandb.Table(
                 data=[[name] + [v for v in metric.values()] for name, metric in cr.items()],
