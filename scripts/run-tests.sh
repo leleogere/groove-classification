@@ -3,7 +3,7 @@
 echo "Running tests..."
 
 # Run the unittests tests
-python -m unittest discover -s tests/data_processing
+python -m unittest discover -s tests
 
 # $? stores exit value of the last command
 if [ $? -ne 0 ]; then
