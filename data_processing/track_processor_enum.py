@@ -1,9 +1,17 @@
 from enum import Enum
 
 from data_processing.track_processor_grammar import GrammarTrackProcessor
+from data_processing.track_processor_grammar import GrammarTrackProcessorNoPitches
+from data_processing.track_processor_grammar import GrammarTrackProcessorNoVelocity
 from data_processing.track_processor_pianoroll import PianoRollTrackProcessor
+from data_processing.track_processor_pianoroll import PianoRollTrackProcessorNoPitches
+from data_processing.track_processor_pianoroll import PianoRollTrackProcessorNoVelocity
 from data_processing.track_processor_relative import RelativeMultivariateTrackProcessor
+from data_processing.track_processor_relative import RelativeMultivariateTrackProcessorNoPitches
+from data_processing.track_processor_relative import RelativeMultivariateTrackProcessorNoVelocity
 from data_processing.track_processor_tokenizer import TokenizerTrackProcessor
+from data_processing.track_processor_tokenizer import TokenizerTrackProcessorNoPitches
+from data_processing.track_processor_tokenizer import TokenizerTrackProcessorNoVelocity
 
 
 class TrackProcessors(Enum):
@@ -11,6 +19,18 @@ class TrackProcessors(Enum):
     pianoroll = PianoRollTrackProcessor
     grammar = GrammarTrackProcessor
     tokenizer = TokenizerTrackProcessor
+
+    relative_no_velocity = RelativeMultivariateTrackProcessorNoVelocity
+    relative_no_pitches = RelativeMultivariateTrackProcessorNoPitches
+
+    pianoroll_no_velocity = PianoRollTrackProcessorNoVelocity
+    pianoroll_no_pitches = PianoRollTrackProcessorNoPitches
+
+    tokenizer_no_velocity = TokenizerTrackProcessorNoVelocity
+    tokenizer_no_pitches = TokenizerTrackProcessorNoPitches
+
+    grammar_no_velocity = GrammarTrackProcessorNoVelocity
+    grammar_no_pitches = GrammarTrackProcessorNoPitches
 
     def __str__(self):
         return self.name

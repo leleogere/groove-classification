@@ -50,3 +50,53 @@ class RelativeMultivariateTrackProcessor(TrackProcessor):
     def output_dim(self) -> int:
         # As many features as there are drums + 3 (velocity, duration, timeshift)
         return len(self.drums) + 3
+
+
+class RelativeMultivariateTrackProcessorNoVelocity(RelativeMultivariateTrackProcessor):
+    short_name = "relative_no_velocity"
+
+    def track_to_tensor_with_positions(self, track: Track):
+        tensor, positions = super().track_to_tensor_with_positions(track)
+        # Remove velocity component
+        vel_dim = len(self.drums)
+        tensor = torch.cat([tensor[:, :vel_dim], tensor[:, vel_dim + 1 :]], dim=-1)
+        return tensor, positions
+
+    @property
+    def output_dim(self) -> int:
+        return super().output_dim - 1
+
+
+class RelativeMultivariateTrackProcessorNoPitches(RelativeMultivariateTrackProcessor):
+    short_name = "relative_no_pitches"
+
+    def track_to_tensor_with_positions(self, track: Track):
+        tensor, positions = super().track_to_tensor_with_positions(track)
+        # Remove pitch component
+        tensor = tensor[:, len(self.drums) :]
+        return tensor, positions
+
+    @property
+    def output_dim(self) -> int:
+        return super().output_dim - len(self.drums)
+
+
+if __name__ == "__main__":
+    from pathlib import Path
+
+    midi = Path(
+        "../../papiers/groove_classification/example/example2_notefixed_durationfixed_randomized.mid"
+    )
+    track = Track(midi, bpm=80)
+
+    for processor in [
+        RelativeMultivariateTrackProcessor(),
+        RelativeMultivariateTrackProcessorNoVelocity(),
+        RelativeMultivariateTrackProcessorNoPitches(),
+    ]:
+        tensor, positions = processor.track_to_tensor_with_positions(track)
+        print(f"{tensor.shape = }")
+        # print(f"{positions = }")
+        print(f"{processor.output_dim = }")
+        print(tensor[:2, :])
+        print()

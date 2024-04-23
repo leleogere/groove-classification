@@ -243,38 +243,36 @@ class GrammarTrackProcessor(TrackProcessor):
         return super().collate_fn(filtered_batch)
 
 
-# if __name__ == "__main__":
-#     import matplotlib.pyplot as plt
-#
-#     MIDI_DIR = Path("/tmp/augmented_tracks")
-#     GRAMMAR_FILE = Path("utils/grammar.wta")
-#     SVG_PATHS = Path("/tmp/svg")
-#
-#     Path("/tmp/trees").mkdir(exist_ok=True)
-#     bpm_file = MIDI_DIR / "bpm.json"
-#
-#     import json
-#
-#     with open(bpm_file, "r") as f:
-#         bpm_dict = json.load(f)
-#
-#     from tqdm import tqdm
-#
-#     processor = GrammarTrackProcessor(GRAMMAR_FILE, sequences_dir=Path("/tmp/joblib_cache"))
-#
-#     for midi_file in tqdm(sorted(MIDI_DIR.glob("**/*.mid"))):
-#         print("MIDI file:", midi_file)
-#         track = Track(
-#             midi_path=midi_file,
-#             bpm=bpm_dict[midi_file.name],
-#             time_signature=(4, 4),
-#         )
-#         # print(processor.get_rules_and_indices(track))
-#         # processor.export_last_parsed_file_to_svg(SVG_PATHS / f"{midi_file.stem}.svg")
-#         tensor = processor.notes_to_tensor(track)
-#         plt.imshow(tensor.T, aspect="auto", interpolation="nearest")
-#         plt.grid()
-#         plt.show()
+class GrammarTrackProcessorNoVelocity(GrammarTrackProcessor):
+    short_name = "grammar_no_velocity"
+
+    def track_to_tensor_with_positions(
+        self,
+        track: Track,
+    ) -> torch.Tensor | None:
+        tensor, positions = super().track_to_tensor_with_positions(track)
+        # Binarize the drums part
+        tensor[:, self.grammar.num_simplified_rules() :] = (
+            tensor[:, self.grammar.num_simplified_rules() :] > 0
+        ).float()
+        return tensor, positions
+
+
+class GrammarTrackProcessorNoPitches(GrammarTrackProcessor):
+    short_name = "grammar_no_pitches"
+
+    def track_to_tensor_with_positions(
+        self,
+        track: Track,
+    ) -> torch.Tensor | None:
+        tensor, positions = super().track_to_tensor_with_positions(track)
+        # Remove pitch component
+        tensor = tensor[:, : self.grammar.num_simplified_rules()]
+        return tensor, positions
+
+    @property
+    def output_dim(self) -> int:
+        return self.grammar.num_simplified_rules()
 
 
 if __name__ == "__main__":
@@ -285,8 +283,10 @@ if __name__ == "__main__":
     # midi_paths = list(MIDI_PATH.rglob("*_funk_80_*.mid"))[:1]
     midi_paths = [
         Path(
-            # "../groove_data/split_measures=4/groove/drummer1/session1/1_funk_80_beat_4-4/1_funk_80_beat_4-4_variation=original/1_funk_80_beat_4-4_variation=original_startbar=04_numbars=4.mid",
-            "../groove_data/split_measures=4/groove/drummer1/session1/1_funk_80_beat_4-4/1_funk_80_beat_4-4_variation=original/1_funk_80_beat_4-4_variation=original_startbar=08_numbars=4.mid",
+            "../groove_data/split_measures=4/groove/drummer1/session1/1_funk_80_beat_4-4/1_funk_80_beat_4-4_variation=original/1_funk_80_beat_4-4_variation=original_startbar=04_numbars=4.mid",
+            # "../groove_data/split_measures=4/groove/drummer1/session1/1_funk_80_beat_4-4/1_funk_80_beat_4-4_variation=original/1_funk_80_beat_4-4_variation=original_startbar=08_numbars=4.mid",
+            # "../groove_data/groove/drummer1/session1/1_funk_80_beat_4-4.mid",
+            # "../../papiers/groove-classification/example/1_example_80_beat_4-4.mid"
         )
     ]
     # MIDI_PATH = Path("/tmp/augmented_tracks")
@@ -303,27 +303,67 @@ if __name__ == "__main__":
     ]
     GRAMMAR_FILE = Path("utils/grammar.wta")
 
-    processor = GrammarTrackProcessor(
-        GRAMMAR_FILE,
-        sequences_dir=None,
-        tree_positional_encoding=True,
-    )
-    from pprint import pprint
-
-    pprint(processor.grammar.basic_rules)
-
-    for track in tracks:
-        tree = processor.track_to_tree(track, none_if_parsing_failed=True)
-        print(tree.to_string_top_down())
-        print(tree.to_string_left_right())
-        if tree is not None:
+    for processor in [
+        GrammarTrackProcessor(GRAMMAR_FILE, sequences_dir=None, tree_positional_encoding=True),
+        GrammarTrackProcessorNoVelocity(
+            GRAMMAR_FILE, sequences_dir=None, tree_positional_encoding=True
+        ),
+        GrammarTrackProcessorNoPitches(
+            GRAMMAR_FILE, sequences_dir=None, tree_positional_encoding=True
+        ),
+    ]:
+        print(processor.str_state())
+        for track in tracks:
             tensor, positions = processor.track_to_tensor_with_positions(track)
-            print(torch.tensor(positions).shape)
-
+            print(f"{tensor.shape = }")
+            print(f"{processor.output_dim = }")
             # subplots with colorbars
-            fig, axs = plt.subplots(2)
-            rules = axs[0].imshow(tensor.T, aspect="auto", interpolation="nearest")
+            fig, axs = plt.subplots(1, sharex=True, dpi=140)
+            rules = plt.imshow(tensor.T, aspect="auto", interpolation="nearest")
             plt.colorbar(rules)
-            pe = axs[1].imshow(torch.tensor(positions).T, aspect="auto", interpolation="nearest")
-            plt.colorbar(pe, ticks=range(processor.grammar.max_depth))
-            plt.show()
+            plt.title("OHE rules [y<15] and drums [y>15]")
+            plt.xlabel("Sequence of rules (pre-order depth-first)")
+            plt.ylabel("Rule index (0-14) and drum pitch (15-36)")
+            plt.tight_layout()
+            plt.show(block=False)
+    plt.show()
+
+    # processor = GrammarTrackProcessor(
+    #     GRAMMAR_FILE,
+    #     sequences_dir=None,
+    #     tree_positional_encoding=True,
+    # )
+    # from pprint import pprint
+    #
+    # pprint(processor.grammar.basic_rules)
+    #
+    #
+    # for track in tracks:
+    #     tree = processor.track_to_tree(track, none_if_parsing_failed=True)
+    #     if tree is not None:
+    #         # tensor, positions = processor.track_to_tensor_with_positions(track)
+    #         tree.children.pop(-1)
+    #         tensor = processor.tree_to_tensor(tree, track)
+    #         positions = tree.get_positions()
+    #         print(tree.to_string_top_down())
+    #         print(tree.to_string_left_right())
+    #         pprint(tree.to_dict(), sort_dicts=False)
+    #         positions = torch.tensor(positions)
+    #         print(positions.shape)
+    #
+    #         # subplots with colorbars
+    #         fig, axs = plt.subplots(2, sharex=True, dpi=140)
+    #         pe = axs[0].imshow(positions.T, aspect="auto", interpolation="nearest")
+    #         plt.colorbar(pe)
+    #         axs[0].set_title("Positional Encoding")
+    #         axs[0].set_ylabel(
+    #             f"Child index (0-{processor.grammar.max_depth-1}) and number of children ({processor.grammar.max_depth}-{2*processor.grammar.max_depth})"
+    #         )
+    #         rules = axs[1].imshow(tensor.T, aspect="auto", interpolation="nearest")
+    #         plt.colorbar(rules)
+    #         axs[1].set_title("OHE rules [y<15] and drums [y>15]")
+    #         axs[1].set_xlabel("Sequence of rules (pre-order depth-first)")
+    #         axs[1].set_ylabel("Rule index (0-14) and drum pitch (15-36)")
+    #         plt.tight_layout()
+    #         fig.subplots_adjust(hspace=0.1)
+    #         plt.show()

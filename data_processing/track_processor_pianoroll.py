@@ -47,3 +47,100 @@ class PianoRollTrackProcessor(TrackProcessor):
     def output_dim(self) -> int:
         # As many features as there are drums ("height" of the piano roll)
         return len(self.drums)
+
+
+class PianoRollTrackProcessorNoVelocity(PianoRollTrackProcessor):
+    short_name = "pianoroll_no_velocity"
+
+    def track_to_tensor_with_positions(self, track: Track):
+        tensor, positions = super().track_to_tensor_with_positions(track)
+        # binarize the tensor
+        tensor = (tensor > 0).float()
+        return tensor, positions
+
+
+class PianoRollTrackProcessorNoPitches(PianoRollTrackProcessor):
+    short_name = "pianoroll_no_pitches"
+
+    def track_to_tensor_with_positions(self, track: Track):
+        tensor, positions = super().track_to_tensor_with_positions(track)
+        # remove pitch information by flattening the tensor (take mean when multiple notes at same time?)
+        num_notes = (tensor > 0).sum(dim=1, keepdim=True).float()
+        num_notes[num_notes == 0] = 1  # to avoid division by zero
+        tensor = tensor.sum(dim=1, keepdim=True) / num_notes
+        return tensor, positions
+
+    @property
+    def output_dim(self) -> int:
+        # Only one as pitches flattened
+        return 1
+
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+
+    midi = Path(
+        "../../papiers/groove_classification/example/example2_notefixed_durationfixed_randomized.mid"
+    )
+    track = Track(midi, bpm=80)
+
+    processor = PianoRollTrackProcessor()
+    tensor, positions = processor.track_to_tensor_with_positions(track)
+    print(tensor.shape)
+
+    plt.figure()
+    plt.imshow(tensor.transpose(0, 1), aspect="auto")
+    plt.yticks(range(len(processor.drums)), range(len(processor.drums)))
+    plt.xlabel("Time steps")
+    plt.ylabel("Drum ID")
+    plt.title("Piano Roll")
+    plt.grid(alpha=0.3)
+    plt.show(block=False)
+
+    # non-velocity
+    plt.figure()
+    processor = PianoRollTrackProcessorNoVelocity()
+    tensor, positions = processor.track_to_tensor_with_positions(track)
+    print(tensor.shape)
+    plt.imshow(tensor.transpose(0, 1), aspect="auto")
+    plt.yticks(range(len(processor.drums)), range(len(processor.drums)))
+    plt.xlabel("Time steps")
+    plt.ylabel("Drum ID")
+    plt.title("Piano Roll (no velocity)")
+    plt.grid(alpha=0.3)
+    plt.show(block=False)
+
+    # non-pitches
+    plt.figure()
+    processor = PianoRollTrackProcessorNoPitches()
+    tensor, positions = processor.track_to_tensor_with_positions(track)
+    print(tensor.shape)
+    plt.imshow(tensor.transpose(0, 1), aspect="auto")
+    plt.xlabel("Time steps")
+    plt.ylabel("Drum ID")
+    plt.title("Piano Roll (no pitches)")
+    plt.grid(alpha=0.3)
+    plt.show()
+
+
+# if __name__ == "__main__":
+#     import matplotlib.pyplot as plt
+#
+#     midi = Path("../../papiers/groove_classification/example/example2_fixed_durations_fixed.mid")
+#     track = Track(midi, bpm=80)
+#
+#     processor = PianoRollTrackProcessor()
+#     tensor, positions = processor.track_to_tensor_with_positions(track)
+#     print(tensor.shape)
+#
+#     plt.imshow(tensor.transpose(0, 1), aspect="auto")
+#     # range on yaxis
+#     # plt.yticks(range(len(processor.drums)), [drum.name for drum in processor.drums])
+#     plt.yticks(range(len(processor.drums)), range(len(processor.drums)))
+#     # Titles
+#     plt.xlabel("Time steps")
+#     plt.ylabel("Drum ID")
+#     plt.title("Piano Roll")
+#     # Grid
+#     plt.grid(alpha=0.3)
+#     plt.show()

@@ -56,6 +56,41 @@ class TokenizerTrackProcessor(TrackProcessor):
         return 1
 
 
+class TokenizerTrackProcessorNoVelocity(TokenizerTrackProcessor):
+    short_name = "tokenizer_no_velocity"
+
+    def track_to_tensor_with_positions(self, track: Track):
+        tensor, _ = super().track_to_tensor_with_positions(track)
+        # Remove all velocity tokens (with tokenizer.token_id_type(token) != "Velocity")
+        tensor = tensor[
+            [
+                i
+                for i, id_ in enumerate(tensor)
+                if self.tokenizer.token_id_type(id_.item()) != "Velocity"
+            ]
+        ]
+        positions = list(range(len(tensor)))  # recompute positions
+        return tensor, positions
+
+
+class TokenizerTrackProcessorNoPitches(TokenizerTrackProcessor):
+    short_name = "tokenizer_no_pitches"
+
+    def track_to_tensor_with_positions(self, track: Track):
+        tensor, _ = super().track_to_tensor_with_positions(track)
+        # Remove all pitch tokens (with id s.t. tokenizer.token_id_type(id) != "Pitch")
+        tensor = tensor[
+            [
+                i
+                for i, id_ in enumerate(tensor)
+                if self.tokenizer.token_id_type(id_.item())
+                not in ["NoteOn", "NoteOff", "DrumOn", "DrumOff", "PitchDrum", "Pitch", "PitchNote"]
+            ]
+        ]
+        positions = list(range(len(tensor)))  # recompute positions
+        return tensor, positions
+
+
 if __name__ == "__main__":
     from utils.utils import parse_bpm_from_file_name, parse_time_signature_from_file_name
 
@@ -81,8 +116,20 @@ if __name__ == "__main__":
         for midi_path in midi_paths
     ]
 
-    processor = TokenizerTrackProcessor("midilike")
+    import numpy as np
 
-    for track in tracks:
-        tensor = processor.track_to_tensor(track)
-        print(tensor)
+    tok_type = "structured"
+    for processor in [
+        TokenizerTrackProcessor(tok_type),
+        TokenizerTrackProcessorNoVelocity(tok_type),
+        TokenizerTrackProcessorNoPitches(tok_type),
+    ]:
+        print(f"{processor.str_state() = }")
+        for track in tracks:
+            tensor = processor.track_to_tensor(track)
+            print(
+                np.unique(
+                    [processor.tokenizer.token_id_type(id_.item()) for id_ in tensor.flatten()],
+                    return_counts=True,
+                )
+            )
