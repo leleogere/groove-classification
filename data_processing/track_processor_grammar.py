@@ -295,7 +295,7 @@ class GrammarTrackProcessorNoPitchesNoVelocity(GrammarTrackProcessor):
 
     @property
     def output_dim(self) -> int:
-        return len(DRUMS)
+        return self.grammar.num_simplified_rules() + 1
 
 
 if __name__ == "__main__":
