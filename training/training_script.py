@@ -25,8 +25,8 @@ def main(params: ScriptParameters):
     track_processor_param_prefix = f"track_processor_{params.track_processor_type.name.removesuffix('_no_velocity').removesuffix('_no_pitches')}"
     track_processor_params = {
         parameter[len(track_processor_param_prefix) + 1 :]
-        .removeprefix("_no_velocity")
-        .removeprefix("_no_pitches"): getattr(params, parameter)
+        .removeprefix("_no_pitches")
+        .removeprefix("_no_velocity"): getattr(params, parameter)
         for parameter in params.__dict__.keys()
         if parameter.startswith(track_processor_param_prefix)
     }
@@ -36,6 +36,7 @@ def main(params: ScriptParameters):
         TrackProcessors.grammar,
         TrackProcessors.grammar_no_velocity,
         TrackProcessors.grammar_no_pitches,
+        TrackProcessors.grammar_no_pitches_no_velocity,
     ]:
         track_processor_params["sequences_dir"] = params.processed_data_path / "cache"
     track_processor: TrackProcessor = params.track_processor_type.value(**track_processor_params)
@@ -48,6 +49,7 @@ def main(params: ScriptParameters):
         TrackProcessors.grammar,
         TrackProcessors.grammar_no_velocity,
         TrackProcessors.grammar_no_pitches,
+        TrackProcessors.grammar_no_pitches_no_velocity,
     ]:
         splitter = MidiSplitter(
             num_measures_per_chunk=params.num_measures_per_chunk,
@@ -114,11 +116,13 @@ def main(params: ScriptParameters):
         # Relative or pianoroll : continuous positional encoding
         if params.track_processor_type in [
             TrackProcessors.relative,
-            TrackProcessors.pianoroll,
             TrackProcessors.relative_no_pitches,
             TrackProcessors.relative_no_velocity,
+            TrackProcessors.relative_no_pitches_no_velocity,
+            TrackProcessors.pianoroll,
             TrackProcessors.pianoroll_no_pitches,
             TrackProcessors.pianoroll_no_velocity,
+            TrackProcessors.pianoroll_no_pitches_no_velocity,
         ]:
             positional_encoder = ContinuousPositionalEncoder
         # Grammar-tree : tree positional encoding
@@ -128,6 +132,7 @@ def main(params: ScriptParameters):
                 TrackProcessors.grammar,
                 TrackProcessors.grammar_no_pitches,
                 TrackProcessors.grammar_no_velocity,
+                TrackProcessors.grammar_no_pitches_no_velocity,
             ]
             and params.track_processor_grammar_tree_positional_encoding
         ):
@@ -138,11 +143,13 @@ def main(params: ScriptParameters):
         # Grammar-seq or tokenizer : classical sequential positional encoding
         elif params.track_processor_type in [
             TrackProcessors.grammar,
-            TrackProcessors.tokenizer,
             TrackProcessors.grammar_no_pitches,
             TrackProcessors.grammar_no_velocity,
+            TrackProcessors.grammar_no_pitches_no_velocity,
+            TrackProcessors.tokenizer,
             TrackProcessors.tokenizer_no_pitches,
             TrackProcessors.tokenizer_no_velocity,
+            TrackProcessors.tokenizer_no_pitches_no_velocity,
         ]:
             positional_encoder = PositionalEncoder
         else:
@@ -161,6 +168,7 @@ def main(params: ScriptParameters):
         TrackProcessors.tokenizer,
         TrackProcessors.tokenizer_no_pitches,
         TrackProcessors.tokenizer_no_velocity,
+        TrackProcessors.tokenizer_no_pitches_no_velocity,
     ]:
         model_specific_params["num_embeddings"] = len(track_processor.tokenizer.vocab)
         input_dim = params.track_processor_tokenizer_embedding_dim  # fix model input dim to emb_dim
@@ -187,6 +195,7 @@ def main(params: ScriptParameters):
             TrackProcessors.grammar,
             TrackProcessors.grammar_no_pitches,
             TrackProcessors.grammar_no_velocity,
+            TrackProcessors.grammar_no_pitches_no_velocity,
         ]
         and params.track_processor_grammar_tree_positional_encoding
         and os.environ.get("LSTM_TREE_PE") is not None
