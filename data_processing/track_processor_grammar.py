@@ -266,13 +266,36 @@ class GrammarTrackProcessorNoPitches(GrammarTrackProcessor):
         track: Track,
     ) -> torch.Tensor | None:
         tensor, positions = super().track_to_tensor_with_positions(track)
-        # Remove pitch component
-        tensor = tensor[:, : self.grammar.num_simplified_rules()]
+        # Flatten pitches to a single value (same implementation as in PianoRollTrackProcessorNoPitches)
+        num_notes = (tensor[:, self.grammar.num_simplified_rules() :] > 0).sum(dim=1)
+        num_notes[num_notes == 0] = 1  # Avoid division by zero
+        flattened_pitches = tensor[:, self.grammar.num_simplified_rules() :].sum(dim=1) / num_notes
+        tensor = tensor[:, : self.grammar.num_simplified_rules() + 1]
+        tensor[:, -1] = flattened_pitches
         return tensor, positions
 
     @property
     def output_dim(self) -> int:
-        return self.grammar.num_simplified_rules()
+        return self.grammar.num_simplified_rules() + 1
+
+
+class GrammarTrackProcessorNoPitchesNoVelocity(GrammarTrackProcessor):
+    short_name = "grammar_no_pitches_no_velocity"
+
+    def track_to_tensor_with_positions(
+        self,
+        track: Track,
+    ) -> torch.Tensor | None:
+        tensor, positions = super().track_to_tensor_with_positions(track)
+        # Flatten pitches to a single value (same implementation as in PianoRollTrackProcessorNoPitchesNoVelocity)
+        flattened_pitches = (tensor[:, self.grammar.num_simplified_rules() :] > 0).sum(dim=1)
+        tensor = tensor[:, : self.grammar.num_simplified_rules() + 1]
+        tensor[:, -1] = flattened_pitches
+        return tensor, positions
+
+    @property
+    def output_dim(self) -> int:
+        return len(DRUMS)
 
 
 if __name__ == "__main__":
@@ -309,6 +332,9 @@ if __name__ == "__main__":
             GRAMMAR_FILE, sequences_dir=None, tree_positional_encoding=True
         ),
         GrammarTrackProcessorNoPitches(
+            GRAMMAR_FILE, sequences_dir=None, tree_positional_encoding=True
+        ),
+        GrammarTrackProcessorNoPitchesNoVelocity(
             GRAMMAR_FILE, sequences_dir=None, tree_positional_encoding=True
         ),
     ]:

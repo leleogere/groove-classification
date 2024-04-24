@@ -76,6 +76,21 @@ class PianoRollTrackProcessorNoPitches(PianoRollTrackProcessor):
         return 1
 
 
+class PianoRollTrackProcessorNoPitchesNoVelocity(PianoRollTrackProcessor):
+    short_name = "pianoroll_no_pitches_no_velocity"
+
+    def track_to_tensor_with_positions(self, track: Track):
+        tensor, positions = super().track_to_tensor_with_positions(track)
+        # remove pitch and velocity information by flattening the tensor (keep number of notes)
+        tensor = (tensor > 0).sum(dim=1, keepdim=True).float()
+        return tensor, positions
+
+    @property
+    def output_dim(self) -> int:
+        # Only one as pitches flattened
+        return 1
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
@@ -84,42 +99,25 @@ if __name__ == "__main__":
     )
     track = Track(midi, bpm=80)
 
-    processor = PianoRollTrackProcessor()
-    tensor, positions = processor.track_to_tensor_with_positions(track)
-    print(tensor.shape)
+    for processor in [
+        PianoRollTrackProcessor,
+        PianoRollTrackProcessorNoVelocity,
+        PianoRollTrackProcessorNoPitches,
+        PianoRollTrackProcessorNoPitchesNoVelocity,
+    ]:
+        processor = processor()
+        tensor, positions = processor.track_to_tensor_with_positions(track)
+        print(tensor.shape)
 
-    plt.figure()
-    plt.imshow(tensor.transpose(0, 1), aspect="auto")
-    plt.yticks(range(len(processor.drums)), range(len(processor.drums)))
-    plt.xlabel("Time steps")
-    plt.ylabel("Drum ID")
-    plt.title("Piano Roll")
-    plt.grid(alpha=0.3)
-    plt.show(block=False)
+        plt.figure()
+        plt.imshow(tensor.transpose(0, 1), aspect="auto")
+        plt.yticks(range(len(processor.drums)), range(len(processor.drums)))
+        plt.xlabel("Time steps")
+        plt.ylabel("Drum ID")
+        plt.title(processor.short_name)
+        plt.grid(alpha=0.3)
+        plt.show(block=False)
 
-    # non-velocity
-    plt.figure()
-    processor = PianoRollTrackProcessorNoVelocity()
-    tensor, positions = processor.track_to_tensor_with_positions(track)
-    print(tensor.shape)
-    plt.imshow(tensor.transpose(0, 1), aspect="auto")
-    plt.yticks(range(len(processor.drums)), range(len(processor.drums)))
-    plt.xlabel("Time steps")
-    plt.ylabel("Drum ID")
-    plt.title("Piano Roll (no velocity)")
-    plt.grid(alpha=0.3)
-    plt.show(block=False)
-
-    # non-pitches
-    plt.figure()
-    processor = PianoRollTrackProcessorNoPitches()
-    tensor, positions = processor.track_to_tensor_with_positions(track)
-    print(tensor.shape)
-    plt.imshow(tensor.transpose(0, 1), aspect="auto")
-    plt.xlabel("Time steps")
-    plt.ylabel("Drum ID")
-    plt.title("Piano Roll (no pitches)")
-    plt.grid(alpha=0.3)
     plt.show()
 
 

@@ -91,6 +91,33 @@ class TokenizerTrackProcessorNoPitches(TokenizerTrackProcessor):
         return tensor, positions
 
 
+class TokenizerTrackProcessorNoPitchesNoVelocity(TokenizerTrackProcessorNoVelocity):
+    short_name = "tokenizer_no_pitches_no_velocity"
+
+    def track_to_tensor_with_positions(self, track: Track):
+        tensor, _ = super().track_to_tensor_with_positions(track)
+        # Remove all pitch tokens (with id s.t. tokenizer.token_id_type(id) != "Pitch")
+        tensor = tensor[
+            [
+                i
+                for i, id_ in enumerate(tensor)
+                if self.tokenizer.token_id_type(id_.item())
+                not in [
+                    "NoteOn",
+                    "NoteOff",
+                    "DrumOn",
+                    "DrumOff",
+                    "PitchDrum",
+                    "Pitch",
+                    "PitchNote",
+                    "Velocity",
+                ]
+            ]
+        ]
+        positions = list(range(len(tensor)))  # recompute positions
+        return tensor, positions
+
+
 if __name__ == "__main__":
     from utils.utils import parse_bpm_from_file_name, parse_time_signature_from_file_name
 
@@ -123,6 +150,7 @@ if __name__ == "__main__":
         TokenizerTrackProcessor(tok_type),
         TokenizerTrackProcessorNoVelocity(tok_type),
         TokenizerTrackProcessorNoPitches(tok_type),
+        TokenizerTrackProcessorNoPitchesNoVelocity(tok_type),
     ]:
         print(f"{processor.str_state() = }")
         for track in tracks:

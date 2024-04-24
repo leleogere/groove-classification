@@ -81,6 +81,22 @@ class RelativeMultivariateTrackProcessorNoPitches(RelativeMultivariateTrackProce
         return super().output_dim - len(self.drums)
 
 
+class RelativeMultivariateTrackProcessorNoPitchesNoVelocity(
+    RelativeMultivariateTrackProcessorNoVelocity
+):
+    short_name = "relative_no_pitches_no_velocity"
+
+    def track_to_tensor_with_positions(self, track: Track):
+        tensor, positions = super().track_to_tensor_with_positions(track)
+        # Remove pitch component
+        tensor = tensor[:, -2:]
+        return tensor, positions
+
+    @property
+    def output_dim(self) -> int:
+        return 2
+
+
 if __name__ == "__main__":
     from pathlib import Path
 
@@ -93,6 +109,7 @@ if __name__ == "__main__":
         RelativeMultivariateTrackProcessor(),
         RelativeMultivariateTrackProcessorNoVelocity(),
         RelativeMultivariateTrackProcessorNoPitches(),
+        RelativeMultivariateTrackProcessorNoPitchesNoVelocity(),
     ]:
         tensor, positions = processor.track_to_tensor_with_positions(track)
         print(f"{tensor.shape = }")
