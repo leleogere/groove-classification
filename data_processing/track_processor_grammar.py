@@ -163,7 +163,8 @@ class GrammarTrackProcessor(TrackProcessor):
         if self.tree_positional_encoding:
             positions = tree.get_positions()
         else:
-            positions = tree.traverse(lambda node: node.id)
+            # positions = tree.traverse(lambda node: node.id)
+            positions = list(range(tree.size()))
         return self.tree_to_tensor(tree, track), positions
 
     # def export_last_parsed_file_to_svg(self, path: Path, delete_mei: bool = True):
