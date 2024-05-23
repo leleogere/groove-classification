@@ -271,7 +271,11 @@ class TransformerModule(nn.Module):
         encoder_input_dim = num_heads * num_features_per_head
         self.linear = nn.Linear(input_dim, encoder_input_dim)
         self.relu = nn.ReLU()
-        self.pe = positional_encoder(d_model=encoder_input_dim, dropout=0.1)
+        self.pe = (
+            positional_encoder(d_model=encoder_input_dim, dropout=0.1)
+            if positional_encoder
+            else None
+        )
         self.encoder = nn.TransformerEncoder(
             encoder_layer=nn.TransformerEncoderLayer(
                 d_model=encoder_input_dim,
@@ -297,8 +301,10 @@ class TransformerModule(nn.Module):
         x = self.relu(x)
         if isinstance(self.pe, ContinuousPositionalEncoder | TreePositionalEncoder):
             x = self.pe(x, kwargs["positions"])
-        else:
+        elif isinstance(self.pe, nn.Module):
             x = self.pe(x)
+        else:
+            pass  # Tree structure already encoded in x in that case (only grammar_tbpe_only)
         x = self.encoder(x)
         return x
 

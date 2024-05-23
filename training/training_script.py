@@ -22,7 +22,9 @@ from models.positional_encoding import TreePositionalEncoder
 
 def main(params: ScriptParameters):
     # Setup track processor
-    track_processor_param_prefix = f"track_processor_{params.track_processor_type.name}"
+    track_processor_param_prefix = (
+        f"track_processor_{params.track_processor_type.name.removesuffix('_tbpe_only')}"
+    )
     track_processor_params = {
         parameter[len(track_processor_param_prefix) + 1 :]: getattr(params, parameter)
         for parameter in params.__dict__.keys()
@@ -30,15 +32,20 @@ def main(params: ScriptParameters):
     }
     track_processor_params.pop("embedding_dim", None)  # Not needed here, only in model
     track_processor_params["use_tempo"] = params.use_tempo
-    if params.track_processor_type == TrackProcessors.grammar:
+    if params.track_processor_type in [TrackProcessors.grammar, TrackProcessors.grammar_tbpe_only]:
         track_processor_params["sequences_dir"] = params.processed_data_path / "cache"
+    if params.track_processor_type == TrackProcessors.grammar_tbpe_only:
+        track_processor_params.pop("tree_positional_encoding")
     track_processor: TrackProcessor = params.track_processor_type.value(**track_processor_params)
     augmentor = MidiAugmentor(
         num_variations_per_track=params.num_augmentations,
         include_original_track=True,
         seed=50,
     )
-    if params.track_processor_type != TrackProcessors.grammar:
+    if params.track_processor_type not in [
+        TrackProcessors.grammar,
+        TrackProcessors.grammar_tbpe_only,
+    ]:
         splitter = MidiSplitter(
             num_measures_per_chunk=params.num_measures_per_chunk,
             chunk_overlap=params.chunk_overlap,
@@ -113,6 +120,12 @@ def main(params: ScriptParameters):
                 TreePositionalEncoder,
                 max_depth=track_processor.grammar.max_depth,
             )
+        elif params.track_processor_type == TrackProcessors.grammar_tbpe_only:
+            if not params.track_processor_grammar_tree_positional_encoding:
+                raise ValueError(
+                    "Tree positional encoding must be enabled for grammar_tbpe_only track processor."
+                )
+            positional_encoder = None
         # Grammar-seq or tokenizer : classical sequential positional encoding
         elif params.track_processor_type in [TrackProcessors.grammar, TrackProcessors.tokenizer]:
             positional_encoder = PositionalEncoder

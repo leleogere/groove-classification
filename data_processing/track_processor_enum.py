@@ -1,6 +1,7 @@
 from enum import Enum
 
 from data_processing.track_processor_grammar import GrammarTrackProcessor
+from data_processing.track_processor_grammar import GrammarTrackProcessorTBPEOnly
 from data_processing.track_processor_pianoroll import PianoRollTrackProcessor
 from data_processing.track_processor_relative import RelativeMultivariateTrackProcessor
 from data_processing.track_processor_tokenizer import TokenizerTrackProcessor
@@ -10,6 +11,7 @@ class TrackProcessors(Enum):
     relative = RelativeMultivariateTrackProcessor
     pianoroll = PianoRollTrackProcessor
     grammar = GrammarTrackProcessor
+    grammar_tbpe_only = GrammarTrackProcessorTBPEOnly
     tokenizer = TokenizerTrackProcessor
 
     def __str__(self):

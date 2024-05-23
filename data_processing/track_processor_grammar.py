@@ -243,6 +243,57 @@ class GrammarTrackProcessor(TrackProcessor):
         return super().collate_fn(filtered_batch)
 
 
+class GrammarTrackProcessorTBPEOnly(GrammarTrackProcessor):
+    short_name = "grammar_tbpe_only"
+
+    def __init__(self, weights_file: Path, use_tempo: bool = True, sequences_dir: Path = None):
+        super().__init__(weights_file, use_tempo, sequences_dir, tree_positional_encoding=True)
+        del self.tree_positional_encoding
+
+    def str_state(self) -> str:
+        """String representation of the state of the track processor.
+
+        :return: String representation of the state of the track processor.
+        """
+        return "_-_".join(
+            [
+                self.name,
+                f"use_tempo={self.use_tempo}",
+                f"grammar_file={self.grammar_file.name}",
+            ]
+        )
+
+    def track_to_tree(
+        self,
+        track: Track,
+        none_if_parsing_failed: bool = False,
+    ) -> Node | None:
+        # Needed to avoid weird C errors such as "double free or corruption" or "corrupted
+        # double-linked list"  (no idea why)
+        return super().track_to_tree(track, none_if_parsing_failed=none_if_parsing_failed)
+
+    def tree_to_tensor(self, tree: Node, track: Track) -> torch.Tensor:
+        original_tensor = super().tree_to_tensor(tree, track)
+        drums_tensor = original_tensor[:, self.grammar.num_simplified_rules() :]  # rule id not used
+        positions = torch.tensor(tree.get_positions())
+        return torch.cat([positions, drums_tensor], dim=1)
+
+    def track_to_tensor_with_positions(
+        self,
+        track: Track,
+    ) -> torch.Tensor | None:
+        # No positional encoding as it is in the tensor
+        if "tree" in track.other_data:
+            tree = Node.from_dict(track.other_data["tree"], self.grammar)
+        else:
+            tree = self.track_to_tree(track)
+        return self.tree_to_tensor(tree, track), None
+
+    @property
+    def output_dim(self) -> int:
+        return 2 * self.grammar.max_depth + len(DRUMS)
+
+
 # if __name__ == "__main__":
 #     import matplotlib.pyplot as plt
 #
@@ -326,4 +377,12 @@ if __name__ == "__main__":
             plt.colorbar(rules)
             pe = axs[1].imshow(torch.tensor(positions).T, aspect="auto", interpolation="nearest")
             plt.colorbar(pe, ticks=range(processor.grammar.max_depth))
-            plt.show()
+            plt.show(block=False)
+
+    processor = GrammarTrackProcessorTBPEOnly(GRAMMAR_FILE, sequences_dir=None)
+    for track in tracks:
+        tensor, _ = processor.track_to_tensor_with_positions(track)
+        print(tensor.shape)
+        fig, ax = plt.subplots()
+        ax.imshow(tensor.T, aspect="auto", interpolation="nearest")
+        plt.show()
