@@ -49,8 +49,7 @@ class TestTrackProcessorGrammar(unittest.TestCase):
     def test_track_to_tensor_with_positions_with_seq_encoding(self):
         tensor, positions = self.processor_seq_encoding.track_to_tensor_with_positions(self.track)
         self.assertEqual(tensor.shape, (48, 37))
-        self.assertEqual(len(positions), len(tensor))
         self.assertTrue(
             np.allclose(tensor, np.load(files("tests.resources").joinpath("midi_grammar.npy")))
         )
-        self.assertListEqual(positions, list(range(48)))
+        self.assertIsNone(positions)

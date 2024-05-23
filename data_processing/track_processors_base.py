@@ -124,6 +124,8 @@ class TrackProcessor:
             length of the sequences in the batch is used.
         :return: Stacked tensor of shape (batch_size, num_notes).
         """
+        if all(pos is None for pos in batch_of_positions):
+            return None
         if max_len is None:
             max_len = max(len(positions) for positions in batch_of_positions)
         pad_maker = (
