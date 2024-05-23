@@ -413,6 +413,14 @@ class Node:
 
         return recursive_part(self, is_last=True)
 
+    def size(self) -> int:
+        """
+        Get the size of the tree, i.e. the number of nodes in the tree.
+
+        :return: The size of the tree.
+        """
+        return 1 + sum(child.size() for child in self.children)
+
 
 # def read_rules(grammar_file: Path, additional_rules: dict[int, str] = None) -> dict[int, str]:
 #     """
