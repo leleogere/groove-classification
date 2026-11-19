@@ -1,14 +1,21 @@
-from collections import defaultdict
 from pathlib import Path
 from typing import Sequence
+from typing import TypeVar
 
+import joblib
 import pretty_midi as pm
 from tqdm import tqdm
 
-from utils.classes import Track
+from data_processing.track_processor_grammar import GrammarTrackProcessor
+from utils.grammar import Node
+from utils.utils import ProcessedTrack
+from utils.utils import Track
 from utils.utils import find_common_root
 from utils.utils import get_midi_paths
 from utils.utils import load_and_validate_midi_file
+from utils.utils import merge_tracks
+from utils.utils import parse_bpm_from_file_name
+from utils.utils import parse_time_signature_from_file_name
 
 
 def sliding_window(seq: Sequence, window_size: int = 2) -> Sequence[Sequence]:
@@ -64,10 +71,84 @@ def _chunk_filename(
     return f"{original_midi_path.stem}_{filename_end}.mid"
 
 
-class Splitter:
-    def __init__(self, num_measures_per_chunk: int, chunk_overlap: bool = True):
+class SplitterAbstract:
+    def __init__(
+        self,
+        num_measures_per_chunk: int,
+        chunk_overlap: bool = True,
+    ):
         self.num_measures_per_chunk = num_measures_per_chunk
         self.chunk_overlap = chunk_overlap
+
+    def split_track(
+        self,
+        track: Track | ProcessedTrack,
+        output_dir: Path,
+        skip_existing: bool = True,
+    ) -> list[Track]:
+        raise NotImplementedError
+
+    def split_list_of_tracks(
+        self,
+        tracks: list[Track | ProcessedTrack],
+        output_dir: Path,
+        root_path: Path | None = None,
+        skip_existing: bool = True,
+        n_jobs: int = 1,
+        pbar: bool = True,
+    ) -> dict[Path, list[Path]]:
+        """
+        Split a MIDI dataset into bars.
+        :param tracks: List of tracks to split.
+        :param output_dir: Output directory. The structure of the dataset will be preserved.
+        :param root_path: If None, the output structure will be based on the nearest common parent
+            directory of the MIDI files in the dataset and the given path.
+        :param skip_existing: Whether skip the splitting of a MIDI file if the output directory
+            already exists.
+        :param n_jobs: Number of parallel tracks to split in parallel.
+        :param pbar: Whether to display the note progression for each MIDI file.
+        :return: Dictionary mapping each MIDI file to a list of paths to the chunks.
+        """
+        # Prepare output
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Loop over files
+        midi_paths = [track.midi_path for track in tracks]
+        midi_sizes = [path.stat().st_size for path in midi_paths]
+        if root_path is None:
+            root_path = find_common_root(midi_paths)
+
+        def _split_track(track: Track | ProcessedTrack) -> list[Track]:
+            """Wrapper to split a track to be used in parallel."""
+            base_path = output_dir / track.midi_path.relative_to(root_path).with_suffix("")
+            return self.split_track(
+                track,
+                output_dir=base_path,
+                skip_existing=skip_existing,
+            )
+
+        # Split data in parallel
+        # TODO: use "unordered_generator" when available in joblib?
+        split_tracks_generator = joblib.Parallel(n_jobs=n_jobs, return_as="generator")(
+            joblib.delayed(_split_track)(tr) for tr in tracks
+        )
+
+        # Loop instead of list comprehension to track progression
+        chunked_tracks = {}
+        pbar = tqdm(
+            midi_paths,
+            desc=f"Splitting MIDI files in chunks of {self.num_measures_per_chunk} measures",
+            total=sum(midi_sizes),
+            unit="B",
+            unit_scale=True,
+            unit_divisor=1024,
+            disable=not pbar,
+        )
+        for track, chunks, size in zip(tracks, split_tracks_generator, midi_sizes):
+            chunked_tracks[track] = chunks
+            pbar.update(size)
+        pbar.close()
+        return chunked_tracks
 
     def _get_measures_contained_by_each_chunk(self, total_measures: int) -> Sequence[Sequence[int]]:
         """
@@ -75,10 +156,10 @@ class Splitter:
         :param total_measures:
         :return: A sequence of chunks of the input sequence.
         :example:
-            >>> splitter = Splitter(num_measures_per_chunk=3, chunk_overlap=True)
+            >>> splitter = MidiSplitter(num_measures_per_chunk=3, chunk_overlap=True)
             >>> splitter._get_measures_contained_by_each_chunk(total_measures=8)
             [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7]]
-            >>> splitter = Splitter(num_measures_per_chunk=3, chunk_overlap=False)
+            >>> splitter = MidiSplitter(num_measures_per_chunk=3, chunk_overlap=False)
             >>> splitter._get_measures_contained_by_each_chunk(total_measures=8)
             [[0, 1, 2], [3, 4, 5], [6, 7]]
         """
@@ -93,25 +174,51 @@ class Splitter:
                 window_size=self.num_measures_per_chunk,
             )
 
-    def split_midi_file(self, path: Path, out_path: Path, pbar: bool = False) -> list[Path]:
+
+Splitter = TypeVar("Splitter", bound=SplitterAbstract)
+
+
+class MidiSplitter(SplitterAbstract):
+    def __init__(
+        self,
+        num_measures_per_chunk: int,
+        chunk_overlap: bool = True,
+    ):
+        super().__init__(
+            num_measures_per_chunk=num_measures_per_chunk,
+            chunk_overlap=chunk_overlap,
+        )
+
+    def split_track(
+        self,
+        track: Track,
+        output_dir: Path,
+        skip_existing: bool = True,
+    ) -> list[Track]:
         """
         Split a MIDI file into bars.
-        :param path: Path to the MIDI file.
-        :param out_path: Output directory. All chunks will be written in that directory.
-        :param pbar: Whether to display the note progression.
+        :param track: Track to split.
+        :param output_dir: Output directory. All chunks will be written in that directory.
+        :param skip_existing: Whether to skip the splitting of the MIDI file if the output
         :return: List of paths to the chunks.
         :todo: What if a note starts before the chunk but ends after the chunk?
         """
+        # Skip if the output directory already exists
+        if output_dir.exists() and skip_existing:
+            paths = get_midi_paths(output_dir)
+            tracks = [Track.from_partial(track, midi_path=path) for path in paths]
+            return tracks
+
         # Read midi and associated information
         midi = load_and_validate_midi_file(
-            path,
+            track.midi_path,
             unique_track=True,
             unique_tempo=True,
             unique_time_signature=True,
         )
-        track: pm.Instrument = midi.instruments[0]
-        bpm = midi.get_tempo_changes()[1][0]
-        time_signature = midi.time_signature_changes[0]
+        pm_track: pm.Instrument = midi.instruments[0]
+        bpm = track.bpm
+        time_signature = track.time_signature
 
         # Get the starting time of each measure
         measure_locations = midi.get_downbeats().tolist()
@@ -125,8 +232,8 @@ class Splitter:
 
         # Prepare output
         formatting_number_width = len(str(num_measures))
-        out_path.mkdir(parents=True, exist_ok=True)
-        chunk_file_paths = []
+        output_dir.mkdir(parents=True, exist_ok=True)
+        chunked_tracks = []
 
         # Prepare loop
         measures_in_each_chunk = self._get_measures_contained_by_each_chunk(num_measures)
@@ -151,9 +258,11 @@ class Splitter:
         # Prepare MIDI template
         def create_chunk_template() -> pm.PrettyMIDI:
             chunk_template = pm.PrettyMIDI(initial_tempo=bpm, resolution=midi.resolution)
-            chunk_template.time_signature_changes.append(time_signature)
+            chunk_template.time_signature_changes.append(
+                pm.TimeSignature(time_signature[0], time_signature[1], 0.0)
+            )
             chunk_template.instruments.append(
-                pm.Instrument(track.program, is_drum=track.is_drum, name=track.name)
+                pm.Instrument(pm_track.program, is_drum=pm_track.is_drum, name=pm_track.name)
             )
             return chunk_template
 
@@ -162,13 +271,7 @@ class Splitter:
         # Loop over notes
         current_measure = 0
         current_measure_end = measure_locations[1]
-        for note in tqdm(
-            sorted(track.notes, key=lambda n: n.start),  # make sure notes are sorted by start time
-            total=len(track.notes),
-            unit="note",
-            disable=not pbar,
-            leave=False,
-        ):
+        for note in sorted(pm_track.notes, key=lambda n: n.start):
             # If current note starts after the end of the current measure, move to the next measure
             if note.start >= current_measure_end:
                 current_measure += 1
@@ -199,7 +302,7 @@ class Splitter:
                         )
                     )
         # Loop over all chunks and save them (or drop them if they do not meet the requirements)
-        dropped_chunks_file_path = out_path / "dropped_chunks.csv"
+        dropped_chunks_file_path = output_dir / "dropped_chunks.csv"
         with open(dropped_chunks_file_path, "w") as f:
             f.write("chunk_start,chunk_end,reason\n")
             num_dropped_chunks = 0
@@ -208,11 +311,13 @@ class Splitter:
                 chunk.remove_invalid_notes()
 
                 # Run some test in order to test if a chunk is worth saving
-                num_empty_measures = sum([
-                    1
-                    for measure_idx in measures_in_each_chunk[i]
-                    if num_notes_per_measure[measure_idx] == 0
-                ])
+                num_empty_measures = sum(
+                    [
+                        1
+                        for measure_idx in measures_in_each_chunk[i]
+                        if num_notes_per_measure[measure_idx] == 0
+                    ]
+                )
                 num_notes = len(chunk.instruments[0].notes)
                 drop_message = None  # message to log if the chunk is dropped
                 if num_notes == 0:
@@ -238,96 +343,152 @@ class Splitter:
                     )
                     num_dropped_chunks += 1
                 else:  # Save the chunk
-                    chunk_file_path = out_path / _chunk_filename(
-                        original_midi_path=path,
+                    chunk_file_path = output_dir / _chunk_filename(
+                        original_midi_path=track.midi_path,
                         start_bar=chunk_measures_start_and_end_measures[i][0],
                         num_bars=len(measures_in_each_chunk[i]),
                         formatting_number_width=formatting_number_width,
                     )
                     chunk.write(str(chunk_file_path))
-                    chunk_file_paths.append(chunk_file_path)
+                    merge_tracks(chunk_file_path)
+                    chunked_tracks.append(Track.from_partial(track, midi_path=chunk_file_path))
 
         # Remove the log file if no chunk was dropped
         if num_dropped_chunks == 0:
             dropped_chunks_file_path.unlink()
 
-        return chunk_file_paths
+        return chunked_tracks
 
-    def split_midi_dataset(
+
+class RuleSequenceSplitter(SplitterAbstract):
+    def __init__(
         self,
-        dataset: Path | list[Track],
-        out_path: Path,
-        overwrite_existing: bool = True,
-        subpbar: bool = False,
-    ) -> dict[Path, list[Path]]:
-        """
-        Split a MIDI dataset into bars.
-        :param dataset: Path to the MIDI dataset or list of tracks.
-        :param out_path: Output directory. The structure of the dataset will be preserved.
-        :param overwrite_existing: Whether to recompute chunks of files that already have chunks, i.e. files that have
-            at least ONE chunk existing, it will not check if all chunks have been computed. It means that interrupting
-            the splitting process and resuming it later may result in incomplete splitting for the file being processed
-            at the moment of the interruption if overwrite_existing is False.
-        :param subpbar: Whether to display the note progression for each MIDI file.
-        :return: Dictionary mapping each MIDI file to a list of paths to the chunks.
-        """
-        # Prepare output
-        out_path.mkdir(parents=True, exist_ok=True)
-        chunk_file_paths = defaultdict(list)
-
-        # Loop over MIDI files
-        if isinstance(dataset, list):
-            midi_paths = [track.midi_path for track in dataset]
-            midi_sizes = [path.stat().st_size for path in midi_paths]
-            root_path = find_common_root(midi_paths)
-        elif isinstance(dataset, Path):
-            midi_paths, midi_sizes = get_midi_paths(dataset, return_sizes=True)
-            root_path = dataset
-        else:
-            raise TypeError(f"dataset must be a Path or a list of Tracks, not {type(dataset)}")
-        pbar = tqdm(
-            midi_paths,
-            desc=f"Splitting MIDI files in chunks of {self.num_measures_per_chunk} measures",
-            total=sum(midi_sizes),
-            unit="B",
-            unit_scale=True,
-            unit_divisor=1024,
+        grammar_processor: GrammarTrackProcessor,
+        num_measures_per_chunk: int,
+        chunk_overlap: bool = True,
+        split_on: int = -1,
+    ):
+        super().__init__(
+            num_measures_per_chunk=num_measures_per_chunk,
+            chunk_overlap=chunk_overlap,
         )
-        for midi_path, midi_size in zip(midi_paths, midi_sizes):
-            current_out_path = out_path / midi_path.relative_to(root_path).with_suffix("")
-            if current_out_path.exists() and not overwrite_existing:
-                chunk_file_paths[midi_path].extend(sorted(list(current_out_path.rglob("*.mid"))))
-                pbar.update(midi_size)
-                continue
-            current_out_path.parent.mkdir(parents=True, exist_ok=True)
-            current_chunk_paths = self.split_midi_file(midi_path, current_out_path, pbar=subpbar)
-            chunk_file_paths[midi_path].extend(current_chunk_paths)
-            pbar.update(midi_size)
-        pbar.close()
-        return chunk_file_paths
+        self.grammar_processor = grammar_processor
+        self.split_on = split_on
 
-    def __call__(self, path: Path, out_path: Path) -> list[Path] | dict[Path, list[Path]]:
-        """
-        Split a MIDI file or dataset into bars.
-        :param path: Path to the MIDI file or dataset.
-        :param out_path: Output directory. The structure of the dataset will be preserved.
-        :return: List of paths to the chunks if path is a MIDI file, dictionary mapping each MIDI file to a list of
-            paths to the chunks if path is a folder.
-        """
-        if path.is_dir():
-            return self.split_midi_dataset(path, out_path)
+    def split_track(
+        self,
+        track: Track,
+        output_dir: Path,
+        skip_existing: bool = True,
+    ) -> list[Track]:
+        tree = self.grammar_processor.track_to_tree(track, none_if_parsing_failed=True)
+        if tree is None:
+            return []
+        num_measures = len(tree.children)
+
+        # Create chunks
+        formatting_number_width = len(str(num_measures))
+        chunks = []
+        if self.chunk_overlap:
+            range_ = range(0, num_measures - self.num_measures_per_chunk + 1)
         else:
-            return self.split_midi_file(path, out_path)
+            range_ = range(0, num_measures, self.num_measures_per_chunk)
+        if range_.stop > num_measures:
+            breakpoint()
+        for chunk_idx, measure_index in enumerate(range_):
+            current_chunk = Node(
+                grammar=tree.grammar,
+                id_=tree.id,
+                children=tree.children[measure_index : measure_index + self.num_measures_per_chunk],
+            )
+            chunk_name = _chunk_filename(
+                original_midi_path=track.midi_path,
+                start_bar=measure_index,
+                num_bars=self.num_measures_per_chunk,
+                formatting_number_width=formatting_number_width,
+            )
+            chunk = Track.from_partial(
+                track,
+                other_data={
+                    "chunk_name": chunk_name,
+                    "tree": current_chunk.to_dict(),
+                },
+            )
+            chunks.append(chunk)
+        # for chunk_idx, measures in enumerate(measures_per_chunk):
+        #     start, end = measures[0], measures[1]
+        #     idx_start, idx_end = measure_indices[start], measure_indices[end]
+        #     chunk_rules = rules[idx_start:idx_end]
+        #     chunk_indices = midi_indices[idx_start:idx_end]
+        #     chunk_name = _chunk_filename(track.midi_path, idx_start, idx_end, formatting_number_width)
+        #     chunk = ProcessedTrack.from_partial(
+        #         track,
+        #         midi_path=track.midi_path.with_suffix("") / chunk_name,
+        #         notes_tensor=(chunk_rules, chunk_indices),
+        #     )
+        #     chunks.append(chunk)
+
+        return chunks
 
 
 if __name__ == "__main__":
-    # test_midi_path = Path('data/groove/drummer1/eval_session/1_funk-groove1_138_beat_4-4.mid')
-    # test_midi_path = Path('data/groove_augmented/drummer5/session1/8_latin-venezuelan-merengue_162_beat_5-8/8_latin-venezuelan-merengue_162_beat_5-8_variation=7.mid')
-    test_midi_path = Path("data/groove/drummer10/session1/1_jazz-swing_124_beat_4-4.mid")
-    # test_midi_path = Path('groove_light/drummer1/eval_session/4_soul-groove4_80_beat_4-4.mid')
-    # test_midi_path = Path('groove/drummer7/session2/22_rock_118_beat_4-4.mid')
-    # test_midi_path = Path('groove/drummer2/session3/1_rock-shuffle_85_beat_4-4.mid')
-    # test_midi_path = Path('groove/drummer1/session2/111_rock-prog_110_beat_5-4.mid')
-    splitter = Splitter(num_measures_per_chunk=1, chunk_overlap=False)
-    # splitter(test_midi_path, out_path=Path('/tmp/tests'))
-    splitter(test_midi_path, out_path=Path("/tmp/split"))
+    from pprint import pprint
+
+    TEST = "track"
+    # splitter = MidiSplitter(
+    #     num_measures_per_chunk=4,
+    #     chunk_overlap=True,
+    # )
+    splitter = RuleSequenceSplitter(
+        grammar_processor=GrammarTrackProcessor(
+            Path("utils/grammar.wta"),
+            sequences_dir=Path("/tmp/sequences_tests"),
+        ),
+        num_measures_per_chunk=4,
+        chunk_overlap=True,
+    )
+    if TEST == "track":
+        MIDI_PATH = Path("../groove_data/groove/drummer1/session1/1_funk_80_beat_4-4.mid")
+        # MIDI_PATH = Path('data/groove_augmented/drummer5/session1/8_latin-venezuelan-merengue_162_beat_5-8/8_latin-venezuelan-merengue_162_beat_5-8_variation=7.mid')
+        # MIDI_PATH = Path('data/groove/drummer10/session1/1_jazz-swing_124_beat_4-4.mid')
+        # MIDI_PATH = Path('groove_light/drummer1/eval_session/4_soul-groove4_80_beat_4-4.mid')
+        # MIDI_PATH = Path('groove/drummer7/session2/22_rock_118_beat_4-4.mid')
+        # MIDI_PATH = Path('groove/drummer2/session3/1_rock-shuffle_85_beat_4-4.mid')
+        # MIDI_PATH = Path('groove/drummer1/session2/111_rock-prog_110_beat_5-4.mid')
+        OUT_PATH = Path("/tmp/split_tracks")
+        track = Track(
+            midi_path=MIDI_PATH,
+            bpm=parse_bpm_from_file_name(MIDI_PATH.name),
+            time_signature=parse_time_signature_from_file_name(MIDI_PATH.name),
+        )
+        chunks = splitter.split_track(
+            track,
+            output_dir=OUT_PATH,
+            skip_existing=False,
+        )
+        pprint(chunks)
+        for chunk in chunks:
+            print(chunk.midi_path)
+            print(chunk.processed_data)
+            print()
+    elif TEST == "dataset":
+        DATASET_PATH = Path("../groove_data/groove/drummer1/session1")
+        OUT_PATH = Path("/tmp/dataset_split")
+        midi_paths = get_midi_paths(DATASET_PATH)
+        midi_paths = [path for path in midi_paths if "_beat_" in path.name]
+        tracks = [
+            Track(
+                midi_path=path,
+                bpm=parse_bpm_from_file_name(path.name),
+                time_signature=parse_time_signature_from_file_name(path.name),
+            )
+            for path in midi_paths
+        ]
+        augmented_tracks = splitter.split_list_of_tracks(
+            tracks,
+            output_dir=OUT_PATH,
+            skip_existing=False,
+            n_jobs=1,
+        )
+    else:
+        raise ValueError(f"ERROR: {TEST=}")

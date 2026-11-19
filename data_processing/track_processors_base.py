@@ -1,14 +1,11 @@
-from collections import defaultdict
-from enum import Enum
+import copy
 
 import torch
-from torch import LongTensor
 from torch import nn
 
-from utils.classes import ProcessedTrack
-from utils.classes import RelativeNote
-from utils.classes import Track
 from utils.constants import DRUMS
+from utils.utils import ProcessedTrack
+from utils.utils import Track
 
 
 class TrackProcessor:
@@ -32,14 +29,36 @@ class TrackProcessor:
         """
         return self.__class__.__name__
 
-    def notes_to_tensor(self, track: Track) -> torch.Tensor:
+    def str_state(self) -> str:
+        """String representation of the state of the track processor.
+
+        :return: String representation of the state of the track processor.
+        """
+        return "_-_".join([self.name, f"use_tempo={self.use_tempo}"])
+
+    def track_to_tensor_with_positions(
+        self,
+        track: Track,
+    ) -> tuple[torch.Tensor, list[float | int]]:
+        """
+        Operation that turns the *note* events of a track into a tensor. The shape of the
+        resulting tensor should be (num_notes, num_features). This function also return the
+        position (whatever that means for this processor) of each element in the tensor.
+
+        :param track: Track to process.
+        :return: A tuple containing the tensor representation of a track and a list of the position
+            of each of its elements.
+        """
+        raise NotImplementedError
+
+    def track_to_tensor(self, track: Track) -> torch.Tensor:
         """Operation that turn the *note* events of a track into a tensor. The shape of the
         resulting tensor should be (num_notes, num_features).
 
         :param track: Track to process.
         :return: Tensor representation of the track's notes.
         """
-        raise NotImplementedError
+        return self.track_to_tensor_with_positions(track)[0]
 
     def process_track(self, track: Track) -> ProcessedTrack:
         """Process a track.
@@ -48,10 +67,10 @@ class TrackProcessor:
         :return: Processed track, containing the tensor representation of the track's notes, tempo
             and label.
         """
-        return ProcessedTrack(
-            notes_tensor=self.notes_to_tensor(track),
-            **track.__dict__,
-        )
+        tensor, positions = self.track_to_tensor_with_positions(track)
+        track_attributes_copy = copy.deepcopy(track.__dict__)
+        track_attributes_copy["other_data"]["positions"] = positions
+        return ProcessedTrack(processed_data=self.track_to_tensor(track), **track_attributes_copy)
 
     def collate_samples_fn(self, batch_of_notes_tensors: list[torch.Tensor]) -> torch.Tensor:
         """Collate function that stacks the note attributes of a batch of tracks.
@@ -93,16 +112,52 @@ class TrackProcessor:
         """
         return torch.LongTensor(batch_of_label_idxs)
 
+    def collate_positions_fn(
+        self,
+        batch_of_positions: list[list[float | int]] | list[list[list[float | int]]],
+        max_len: int = None,
+    ) -> torch.Tensor:
+        """Collate function that stacks a list of positions.
+
+        :param batch_of_positions: Batch of positions.
+        :param max_len: Maximum length of the sequences if already known. If None, the maximum
+            length of the sequences in the batch is used.
+        :return: Stacked tensor of shape (batch_size, num_notes).
+        """
+        if all(pos is None for pos in batch_of_positions):
+            return None
+        if max_len is None:
+            max_len = max(len(positions) for positions in batch_of_positions)
+        pad_maker = (
+            (lambda pos: (max_len - len(pos), 0))
+            if isinstance(batch_of_positions[0][0], int | float)
+            else (lambda pos: (0, 0, max_len - len(pos), 0))  # for vector pos like tree encoding
+        )
+        padded = [
+            nn.functional.pad(
+                input=torch.FloatTensor(positions),
+                pad=pad_maker(positions),
+                value=self.padding_value,
+            )
+            for positions in batch_of_positions
+        ]
+        stacked = torch.stack(padded)
+        return stacked
+
     def collate_fn(self, batch: list[ProcessedTrack]) -> dict[str, torch.Tensor]:
         """Collate function that stacks the attributes of a batch of tracks.
 
         :param batch: Batch of processed tracks (computed by self.process_track).
         :return: Stacked tensors of shape (batch_size, ...).
         """
+        collated_samples = self.collate_samples_fn([pt.processed_data for pt in batch])
         results = {
             "midi_paths": [pt.midi_path for pt in batch],
-            "samples": self.collate_samples_fn([pt.notes_tensor for pt in batch]),
+            "samples": collated_samples,
             "labels": self.collate_labels_fn([pt.label_idx for pt in batch]),
+            "_positions": self.collate_positions_fn(
+                [pt.other_data["positions"] for pt in batch], max_len=collated_samples.shape[1]
+            ),
         }
         if self.use_tempo:
             results["tempos"] = self.collate_tempos_fn([pt.bpm for pt in batch])
@@ -117,88 +172,3 @@ class TrackProcessor:
 
     def __call__(self, *args, **kwargs):
         return self.process_track(*args, **kwargs)
-
-
-class RelativeMultivariateTrackProcessor(TrackProcessor):
-    short_name = "multivariate"
-    time_norm = 100  # so duration and timeshift are closer to 0-5
-
-    def __init__(self, use_tempo: bool = True):
-        super().__init__(use_tempo=use_tempo)
-
-    def notes_to_tensor(self, track: Track):
-        # Turn a list of dict (RelativeNote.__slots__) into a dict of lists.
-        note_attributes = defaultdict(list)
-        for note in track.relative_notes():
-            for key in RelativeNote.__slots__:
-                note_attributes[key].append(getattr(note, key))
-            # Append drum id for one-hot encoding
-            note_attributes["id"].append(self.drums.pitch_to_id[note.pitch])
-
-        vector_components = [
-            # the 22 first components are the one-hot encoding of the drum id
-            torch.nn.functional.one_hot(
-                torch.tensor(note_attributes["id"]),
-                num_classes=len(self.drums),
-            ).float(),
-            # the 3 others are the normalized velocity, duration and timeshift
-            *[
-                torch.tensor(note_attributes[key], dtype=torch.float).unsqueeze(-1) / norm
-                for key, norm in zip(
-                    ["velocity", "duration", "timeshift"],
-                    [self.velocity_norm, self.time_norm, self.time_norm],
-                )
-            ],
-        ]
-        vector = torch.cat(vector_components, dim=-1)
-        return vector
-
-    @property
-    def output_dim(self) -> int:
-        # As many features as there are drums + 3 (velocity, duration, timeshift)
-        return len(self.drums) + 3
-
-
-class PianoRollTrackProcessor(TrackProcessor):
-    short_name = "pianoroll"
-
-    def __init__(self, resolution: int = 20, use_tempo: bool = True):
-        super().__init__(use_tempo=use_tempo)
-        self.resolution = resolution
-
-    def notes_to_tensor(self, track: Track):
-        notes = track.notes()
-        start = notes[0].start
-        end = max(note.end for note in notes)  # last starting note might not be the last ending one
-        length = end - start
-        num_steps = int(length * self.resolution)
-        piano_roll = torch.zeros(len(self.drums), num_steps)
-        for note in notes:
-            i_start = int((note.start - start) * self.resolution)
-            i_end = int((note.end - start) * self.resolution)
-            piano_roll[self.drums.pitch_to_id[note.pitch], i_start:i_end] = (
-                note.velocity / self.velocity_norm
-            )
-        return piano_roll.transpose(0, 1)  # change to (timestep, features)
-
-    @property
-    def output_dim(self) -> int:
-        # As many features as there are drums ("height" of the piano roll)
-        return len(self.drums)
-
-
-class TrackProcessors(Enum):
-    multivariate = RelativeMultivariateTrackProcessor
-    pianoroll = PianoRollTrackProcessor
-
-    def __str__(self):
-        return self.name
-
-    @staticmethod
-    def from_str(s: str):
-        try:
-            return TrackProcessors[s]
-        except KeyError:
-            raise ValueError(
-                f"Cannot convert {s} to TrackProcessors. Valid values are {list(TrackProcessors)}."
-            )

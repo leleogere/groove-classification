@@ -1,43 +1,73 @@
-from datetime import datetime
-from pathlib import Path
+import os
+import types
+from functools import partial
 
 import lightning as L
-from lightning.pytorch import loggers as loggers, callbacks as callbacks
 import torch
+from lightning.pytorch import callbacks as callbacks
+from lightning.pytorch import loggers as loggers
 
 from cli.parser import ScriptParameters
 from cli.parser import parse_args
-from data_processing.track_processors import TrackProcessor
+from data_augmentation.midi_augmentor import MidiAugmentor
+from data_augmentation.midi_splitter import MidiSplitter
+from data_augmentation.midi_splitter import RuleSequenceSplitter
+from data_processing.track_processor_enum import TrackProcessors
+from data_processing.track_processors_base import TrackProcessor
 from dataset.groove_dataset import GrooveMidiModule
+from models.positional_encoding import ContinuousPositionalEncoder
+from models.positional_encoding import PositionalEncoder
+from models.positional_encoding import TreePositionalEncoder
 
 
 def main(params: ScriptParameters):
     # Setup track processor
-    track_processor_param_prefix = f"track_processor_{params.track_processor_type.name}"
+    track_processor_param_prefix = (
+        f"track_processor_{params.track_processor_type.name.removesuffix('_tbpe_only')}"
+    )
     track_processor_params = {
         parameter[len(track_processor_param_prefix) + 1 :]: getattr(params, parameter)
         for parameter in params.__dict__.keys()
         if parameter.startswith(track_processor_param_prefix)
     }
+    track_processor_params.pop("embedding_dim", None)  # Not needed here, only in model
     track_processor_params["use_tempo"] = params.use_tempo
+    if params.track_processor_type in [TrackProcessors.grammar, TrackProcessors.grammar_tbpe_only]:
+        track_processor_params["sequences_dir"] = params.processed_data_path / "cache"
+    if params.track_processor_type == TrackProcessors.grammar_tbpe_only:
+        track_processor_params.pop("tree_positional_encoding")
     track_processor: TrackProcessor = params.track_processor_type.value(**track_processor_params)
-    groove_module = GrooveMidiModule(
-        path=params.data_path,
-        batch_size=params.training_batch_size,
-        track_processor=track_processor,
-        min_tracks_per_label=params.min_tracks_per_label,
-        cache_location=params.processed_data_path / "cache",
-        split_dataset_into_measures=True,
-        split_dataset_into_measures_kwargs=dict(
-            split_path=params.processed_data_path / "split",
+    augmentor = MidiAugmentor(
+        num_variations_per_track=params.num_augmentations,
+        include_original_track=True,
+        seed=50,
+    )
+    if params.track_processor_type not in [
+        TrackProcessors.grammar,
+        TrackProcessors.grammar_tbpe_only,
+    ]:
+        splitter = MidiSplitter(
             num_measures_per_chunk=params.num_measures_per_chunk,
             chunk_overlap=params.chunk_overlap,
-        ),
-        augment_dataset=params.num_augmentations > 0,
-        augment_dataset_kwargs=dict(
-            augmented_path=params.processed_data_path / "augmented",
-            num_augmentations=params.num_augmentations,
-            seed=22,
+        )
+    else:
+        splitter = RuleSequenceSplitter(
+            grammar_processor=track_processor,
+            num_measures_per_chunk=params.num_measures_per_chunk,
+            chunk_overlap=params.chunk_overlap,
+        )
+    groove_module = GrooveMidiModule(
+        path=params.data_path,
+        processed_data_path=params.processed_data_path,
+        batch_size=params.training_batch_size,
+        track_processor=track_processor,
+        augmentor=augmentor,
+        splitter=splitter,
+        override_metadata=params.override_metadata,
+        n_jobs=(
+            int(0.75 * os.cpu_count())
+            # if params.track_processor_type != TrackProcessors.grammar
+            # else 1  # Parallelism is not supported for grammar processor yet (pyqparse unpicklable)
         ),
     )
 
@@ -70,26 +100,58 @@ def main(params: ScriptParameters):
     loss = torch.nn.CrossEntropyLoss(weight=weights_c)
 
     # Create model
+    input_dim = track_processor.output_dim
     if params.model_type.name == "lstm":
         model_specific_params = {
             "hidden_size": params.model_lstm_hidden_size,
-            "num_layers": params.model_lstm_hidden_size,
+            "num_layers": params.model_lstm_num_layers,
         }
     elif params.model_type.name == "transformer":
+        # Create positional encoder
+        # Relative or pianoroll : continuous positional encoding
+        if params.track_processor_type in [TrackProcessors.relative, TrackProcessors.pianoroll]:
+            positional_encoder = ContinuousPositionalEncoder
+        # Grammar-tree : tree positional encoding
+        elif (
+            params.track_processor_type == TrackProcessors.grammar
+            and params.track_processor_grammar_tree_positional_encoding
+        ):
+            positional_encoder = partial(
+                TreePositionalEncoder,
+                max_depth=track_processor.grammar.max_depth,
+            )
+        elif params.track_processor_type == TrackProcessors.grammar_tbpe_only:
+            if not params.track_processor_grammar_tree_positional_encoding:
+                raise ValueError(
+                    "Tree positional encoding must be enabled for grammar_tbpe_only track processor."
+                )
+            positional_encoder = None
+        # Grammar-seq or tokenizer : classical sequential positional encoding
+        elif params.track_processor_type in [TrackProcessors.grammar, TrackProcessors.tokenizer]:
+            positional_encoder = PositionalEncoder
+        else:
+            raise ValueError(f"Unknown track processor: {params.track_processor_type}.")
+        # Specify parameters
         model_specific_params = {
             "num_heads": params.model_transformer_num_heads,
             "num_features_per_head": params.model_transformer_num_features_per_head,
             "feedforward_dim": params.model_transformer_feedforward_dim,
             "num_layers": params.model_transformer_num_layers,
+            "positional_encoder": positional_encoder,
         }
     else:
         raise ValueError(f"Unknown model name: {params.model_type.name}")
+    if params.track_processor_type == TrackProcessors.tokenizer:
+        model_specific_params["num_embeddings"] = len(track_processor.tokenizer.vocab)
+        input_dim = params.track_processor_tokenizer_embedding_dim  # fix model input dim to emb_dim
+
     model = params.model_type.value(
-        input_dim=track_processor.output_dim,
+        input_dim=input_dim,
         **model_specific_params,
         num_classes=len(groove_module.id_to_label),
         dropout_rate=params.model_dropout_rate,
         lr=params.training_learning_rate,
+        weight_decay=params.training_l2_regularization,
         use_tempo=params.use_tempo,
         class_names=groove_module.unique_labels,
         name=params.model_type.name,
@@ -97,34 +159,73 @@ def main(params: ScriptParameters):
         hparams_to_log=params.to_serializable_dict(),
     )
 
+    # SHORTCUT LSTM to add positional encoding
+    if (
+        params.model_type.name == "lstm"
+        and params.track_processor_type == TrackProcessors.grammar
+        and params.track_processor_grammar_tree_positional_encoding
+        and os.environ.get("LSTM_TREE_PE") is not None
+        and os.environ.get("LSTM_TREE_PE") == "true"
+    ):
+        print("Adding positional encoding to LSTM model")
+        positional_encoder = TreePositionalEncoder(
+            d_model=input_dim,
+            max_depth=track_processor.grammar.max_depth,
+        )
+
+        def forward(self, x, positions, **kwargs):
+            x = self.pe(x, positions)
+            x, _ = self.lstm(x)
+            return x
+
+        model.base_module.pe = positional_encoder
+        model.base_module.forward = types.MethodType(forward, model.base_module)
+
+    # Prepare logger
+    try:
+        project = os.environ["WANDB_PROJECT"]
+    except KeyError:
+        raise KeyError("Please set the WANDB_PROJECT environment variable to your project name")
+    logger = loggers.WandbLogger(
+        save_dir=str(params.results_path),
+        project=project,
+        log_model=True,
+    )
+
     # Prepare callbacks
     early_stopping = callbacks.EarlyStopping(
-        monitor="val/loss",
+        monitor="val/f1_macro",
+        mode="max",
         min_delta=0.00,
         patience=params.training_patience,
-        mode="min",
     )
+    model_checkpoint = callbacks.ModelCheckpoint(
+        monitor="val/f1_macro",
+        mode="max",
+        save_top_k=1,
+        filename="{epoch}-vf1={val/f1_macro:.2f}-vloss={val/loss:.2f}",
+        auto_insert_metric_name=False,
+    )
+
     params.results_path.mkdir(parents=True, exist_ok=True)
-    logger = loggers.TensorBoardLogger(
-        save_dir=params.results_path,
-        name=datetime.now().strftime("%Y-%m-%d"),
-        default_hp_metric=False,
-    )
-    logger_dir = Path(logger.log_dir)
-    logger_dir.mkdir(parents=True, exist_ok=False)
-    groove_module.export_label_infos(logger_dir / "label_infos.txt")
+    print("Label infos:")
+    print(groove_module.label_infos_to_string())
 
     # Train model
     print("Training model...")
     trainer = L.Trainer(
         max_epochs=params.training_num_epochs,
         logger=logger,
-        callbacks=[early_stopping],
+        callbacks=[early_stopping, model_checkpoint],
         devices=1,
     )
     trainer.fit(model, datamodule=groove_module)
+    trainer.test(model, datamodule=groove_module, ckpt_path="last")
+    trainer.test(model, datamodule=groove_module, ckpt_path="best")
 
-    groove_module.memory.reduce_size(bytes_limit="100G")  # TODO: make this configurable
+    logger.experiment.finish()
+
+    # groove_module.memory.reduce_size(bytes_limit="100G")  # TODO: make this configurable
 
 
 if __name__ == "__main__":

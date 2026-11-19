@@ -1,8 +1,9 @@
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from pprint import pformat
 
-from data_processing.track_processors import TrackProcessors
+from data_processing.track_processor_enum import TrackProcessors
 from models.genre_classifier import GenreClassifierType
 
 
@@ -12,6 +13,7 @@ class ScriptParameters:
     data_path: Path
     processed_data_path: Path
     results_path: Path
+    override_metadata: Path
     # Training parameters
     training_batch_size: int
     training_num_epochs: int
@@ -21,6 +23,10 @@ class ScriptParameters:
     # Track processor parameters
     track_processor_type: TrackProcessors
     track_processor_pianoroll_resolution: int
+    track_processor_grammar_weights_file: Path
+    track_processor_grammar_tree_positional_encoding: bool
+    track_processor_tokenizer_type: str
+    track_processor_tokenizer_embedding_dim: int
     # Models parameters
     model_type: GenreClassifierType
     model_lstm_hidden_size: int
@@ -35,7 +41,6 @@ class ScriptParameters:
     chunk_overlap: bool
     num_augmentations: int
     # Others parameters
-    min_tracks_per_label: int
     use_imfw: bool
     use_tempo: bool
 
@@ -47,6 +52,21 @@ class ScriptParameters:
             k: v if isinstance(v, (int, float, str, bool)) else str(v)
             for k, v in self.__dict__.items()
         }
+
+    @classmethod
+    def from_serializable_dict(cls, d: dict):
+        parameters = {}
+        # automatically get enums by annotation
+        enums = {k: v for k, v in cls.__annotations__.items() if issubclass(v, Enum)}
+        for k, v in d.items():
+            if k not in cls.__annotations__:
+                print(f"Warning: {k} is not a valid parameter.")
+                continue
+            if k in enums:
+                parameters[k] = enums[k].__members__[v]
+            else:
+                parameters[k] = cls.__annotations__[k](v)
+        return cls(**parameters)
 
 
 def bool_from_str(s: str) -> bool:
@@ -82,6 +102,12 @@ def parse_args() -> ScriptParameters:
         type=Path,
         required=True,
         help="Path to the results.",
+    )
+    data_group.add_argument(
+        "--override-metadata",
+        type=Path,
+        help="Path to a new filtered info.csv metadata file of the Groove MIDI Dataset.",
+        default=None,
     )
 
     # Training group
@@ -132,6 +158,36 @@ def parse_args() -> ScriptParameters:
         default=30,
         help=f"Pianoroll resolution in steps per second (only for {TrackProcessors.pianoroll}).",
     )
+    track_processor_group.add_argument(
+        "--track-processor-grammar-weights-file",
+        type=Path,
+        help=(
+            "File containing the grammar and the weights associated to each rule (only for"
+            f" {TrackProcessors.grammar})."
+        ),
+    )
+    track_processor_group.add_argument(
+        "--track-processor-grammar-tree-positional-encoding",
+        type=bool_from_str,
+        help=(
+            "Whether to encode the position of each rule in the tree as a positional encoding "
+            "rather than a naive sequential positional encoding. (only for "
+            f"{TrackProcessors.grammar})."
+        ),
+        default=False,
+    )
+    track_processor_group.add_argument(
+        "--track-processor-tokenizer-type",
+        type=str,
+        default="midilike",
+        help="Type of tokenizer to use (only for" f" {TrackProcessors.tokenizer}).",
+    )
+    track_processor_group.add_argument(
+        "--track-processor-tokenizer-embedding-dim",
+        type=int,
+        default=128,
+        help="Embedding dimension to use (only for" f" {TrackProcessors.tokenizer}).",
+    )
 
     # Models group
     models_group = parser.add_argument_group("Models")
@@ -141,6 +197,12 @@ def parse_args() -> ScriptParameters:
         required=True,
         choices=list(GenreClassifierType),
         help="Genre classifier type.",
+    )
+    models_group.add_argument(
+        "--model-dropout-rate",
+        type=float,
+        default=0.3,
+        help="Dropout rate.",
     )
     # LSTM
     models_group.add_argument(
@@ -179,12 +241,6 @@ def parse_args() -> ScriptParameters:
         type=int,
         default=2,
         help="Number of layers in the transformer.",
-    )
-    models_group.add_argument(
-        "--model-dropout-rate",
-        type=float,
-        default=0.3,
-        help="Dropout rate.",
     )
 
     # Data augmentation group
@@ -235,6 +291,7 @@ def parse_args() -> ScriptParameters:
         data_path=args.data_path,
         processed_data_path=args.processed_data_path,
         results_path=args.results_path,
+        override_metadata=args.override_metadata,
         training_batch_size=args.training_batch_size,
         training_num_epochs=args.training_num_epochs,
         training_patience=args.training_patience,
@@ -242,6 +299,10 @@ def parse_args() -> ScriptParameters:
         training_l2_regularization=args.training_l2_regularization,
         track_processor_type=args.track_processor,
         track_processor_pianoroll_resolution=args.track_processor_pianoroll_resolution,
+        track_processor_grammar_weights_file=args.track_processor_grammar_weights_file,
+        track_processor_grammar_tree_positional_encoding=args.track_processor_grammar_tree_positional_encoding,
+        track_processor_tokenizer_type=args.track_processor_tokenizer_type,
+        track_processor_tokenizer_embedding_dim=args.track_processor_tokenizer_embedding_dim,
         model_type=args.model,
         model_lstm_hidden_size=args.model_lstm_hidden_size,
         model_lstm_num_layers=args.model_lstm_num_layers,
@@ -253,7 +314,6 @@ def parse_args() -> ScriptParameters:
         num_measures_per_chunk=args.num_measures_per_chunk,
         chunk_overlap=args.chunk_overlap,
         num_augmentations=args.num_augmentations,
-        min_tracks_per_label=args.min_tracks_per_label,
         use_imfw=args.use_imfw,
         use_tempo=args.use_tempo,
     )
