@@ -8,13 +8,20 @@ from Google Magenta.
 
 Multiple classifiers are implemented, in order to compare their performances.
 
-## Installation
+## Disclaimer
 
-You need [Anaconda](https://www.anaconda.com/) to run this project.
+This repository contains the code I used to produce the results presented in the article ["Improved symbolic drum style classification with grammar-based hierarchical representations"](https://hal.science/hal-04660056) published in ISMIR 2024 proceedings.
+The objective of the paper is to evaluate several representations on a well-defined benchmark, in order to evaluate how sequence-based classifiers would behave with each one.
+The codebase has not really been cleaned (and contains some coding tricks that I am not particularly proud of), but I still wanted to publish it publicily as reference for future works.
 
-You can create the environment with the following commands:
+## Usage
 
+I had trouble building [`qparse`](https://qparse.gitlabpages.inria.fr/) on some machines, so I ended up running all my code in a Docker container for reproducible builds:
 ```bash
-cd project_directory
-conda env create -f env.yml
+cd /path/to/project
+docker build -t groove .  # build the image
+docker run -d --name groove-container -v "$(pwd)":/app groove  # start the container, mapping the cwd into the container
+docker exec -it my-running-container /bin/bash  # log into the container
 ```
+
+If you prefer running without Docker, the `Dockerfile` contains all needed information to build the environment bare metal.
